@@ -33,6 +33,16 @@ local CONFIG = {
     Blur = false,
     BlurSize = 18,
 
+    -- Efek suara saat menekan tombol (bisa dimatikan di Settings)
+    Sound = true,
+    SoundVolume = 0.6,
+    -- Ganti dengan ID audio lain bila suaranya tidak keluar
+    ClickSoundId = "rbxassetid://6895079853",
+
+    -- Tombol melayang untuk buka/tutup UI (untuk HP).
+    -- "auto" = tampil hanya di perangkat sentuh tanpa keyboard, true = selalu, false = tidak pernah
+    FloatButton = "auto",
+
     -- Tombol cepat fitur (diatur lewat tombol "Bind" di Script Hub)
     Keybinds = {
         WalkSpeed = "",
@@ -95,6 +105,10 @@ do
                 CONFIG.GlassTransparency = math.clamp(data.GlassTransparency, 0, 0.95)
             end
             if type(data.Blur) == "boolean" then CONFIG.Blur = data.Blur end
+            if type(data.Sound) == "boolean" then CONFIG.Sound = data.Sound end
+            if type(data.FloatButton) == "boolean" or data.FloatButton == "auto" then
+                CONFIG.FloatButton = data.FloatButton
+            end
         end
         if type(src.ToggleKey) == "string" then CONFIG.ToggleKey = src.ToggleKey end
         if type(src.Keybinds) == "table" then
@@ -181,6 +195,23 @@ local function corner(o, r)
 end
 local PILL = UDim.new(0.5, 0)
 
+-- Efek suara klik (pitch opsional: >1 lebih tinggi, <1 lebih rendah)
+local SoundService = game:GetService("SoundService")
+local function playClick(pitch)
+    if not CONFIG.Sound then return end
+    pcall(function()
+        local s = Instance.new("Sound")
+        s.Name = "HUniversalClick"
+        s.SoundId = CONFIG.ClickSoundId
+        s.Volume = CONFIG.SoundVolume
+        s.PlaybackSpeed = pitch or 1
+        s.Parent = SoundService
+        s.Ended:Connect(function() s:Destroy() end)
+        s:Play()
+        task.delay(3, function() pcall(function() s:Destroy() end) end)
+    end)
+end
+
 -- Tepi kaca: terang di sudut, redup di tengah (efek pantulan cahaya)
 local RIM_STRONG = seq({ {0, 0.12}, {0.22, 0.68}, {0.5, 0.92}, {0.78, 0.68}, {1, 0.18} })
 local RIM_SOFT   = seq({ {0, 0.5},  {0.25, 0.84}, {0.5, 0.95}, {0.75, 0.84}, {1, 0.45} })
@@ -235,12 +266,11 @@ end
 ScreenGui.Parent = parentTarget
 
 ------------------------------------------------------------------------
--- INTRO ALA APLIKASI (blur + ikon + logo chrome + progress + zoom ke jendela)
+-- INTRO ALA APLIKASI (blur + logo buah "HU" + progress + zoom ke jendela)
 ------------------------------------------------------------------------
 local Splash = { started = false, alive = true, introActive = true }
 do
-    local LOGO_W, LOGO_H = 420, 80
-    local ICON_Y, LOGO_Y, BAR_Y = -84, 16, 96 -- posisi vertikal relatif ke tengah layar
+    local ICON_Y, BAR_Y = -34, 96 -- posisi vertikal relatif ke tengah layar
     local WHITE = Color3.new(1, 1, 1)
     local rng = Random.new()
 
@@ -258,15 +288,6 @@ do
         blur.Size = 0
         blur.Parent = Lighting
     end)
-
-    local CHROME = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-        ColorSequenceKeypoint.new(0.40, Color3.fromRGB(210, 216, 228)),
-        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(104, 112, 130)),
-        ColorSequenceKeypoint.new(0.58, Color3.fromRGB(184, 192, 208)),
-        ColorSequenceKeypoint.new(0.82, Color3.fromRGB(236, 240, 246)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 158, 174)),
-    })
 
     -- Latar: gelap + rona warna aksen dari bawah ------------------------------------
     local Dim = make("Frame", {
@@ -297,7 +318,7 @@ do
         }
     end
 
-    -- Glow di belakang ikon (lingkaran bertumpuk) ------------------------------------------
+    -- Glow netral (putih) di belakang logo -------------------------------------------------
     local Glow = make("CanvasGroup", {
         Size = UDim2.fromOffset(400, 400), AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, ICON_Y), BackgroundTransparency = 1,
@@ -308,13 +329,13 @@ do
         local d = 120 + i * 30
         local c = make("Frame", {
             Size = UDim2.fromOffset(d, d), AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.ACCENT,
-            BackgroundTransparency = 0.94, BorderSizePixel = 0,
+            Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = WHITE,
+            BackgroundTransparency = 0.965, BorderSizePixel = 0,
         }, Glow)
         corner(c, PILL)
     end
 
-    -- Titik yang mengorbit ikon --------------------------------------------------------------
+    -- Titik yang mengorbit logo --------------------------------------------------------------
     local orbit = {}
     for i = 1, 6 do
         local d = make("Frame", {
@@ -325,105 +346,59 @@ do
         orbit[i] = d
     end
 
-    -- Ikon aplikasi (squircle kaca dengan huruf H chrome) ------------------------------------------
+    -- Logo: buah bergaya apel yang tersusun dari huruf "H" (kiri) dan "U" (kanan) ------------
+    -- Dirancang di kotak 100 x 100, lalu dikalikan K. Ubah K untuk memperbesar / memperkecil.
+    local K = 1.25
+    local FRUIT = Color3.fromRGB(244, 247, 252) -- warna buah
+    local LEAF = Color3.fromRGB(88, 214, 120)   -- warna daun
+
     local IconG = make("CanvasGroup", {
-        Size = UDim2.fromOffset(130, 130), AnchorPoint = Vector2.new(0.5, 0.5),
+        Size = UDim2.fromOffset(190, 190), AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, ICON_Y), BackgroundTransparency = 1,
         BorderSizePixel = 0, GroupTransparency = 1,
     }, Gui)
     local IconScale = make("UIScale", { Scale = 0.4 }, IconG)
-    local Icon = make("Frame", {
-        Size = UDim2.fromOffset(92, 92), AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0,
+    local Fruit = make("Frame", {
+        Size = UDim2.fromOffset(100 * K, 100 * K), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, BorderSizePixel = 0,
     }, IconG)
-    corner(Icon, UDim.new(0, 26))
-    make("UIGradient", {
-        Rotation = 70,
-        Color = ColorSequence.new(C.ACCENT2:Lerp(WHITE, 0.2), C.ACCENT:Lerp(Color3.new(0, 0, 0), 0.3)),
-    }, Icon)
-    rim(Icon, 1.5, 45, false)
-    local iconGloss = make("Frame", {
-        Size = UDim2.new(1, 0, 0.55, 0), BackgroundColor3 = WHITE, BorderSizePixel = 0,
-    }, Icon)
-    corner(iconGloss, UDim.new(0, 26))
-    make("UIGradient", { Rotation = 90, Transparency = seq({ { 0, 0.68 }, { 1, 1 } }) }, iconGloss)
-    local hShadow = make("TextLabel", {
-        Size = UDim2.fromScale(1, 1), Position = UDim2.fromOffset(0, 3), BackgroundTransparency = 1,
-        Text = "H", TextColor3 = Color3.fromRGB(8, 24, 80), TextTransparency = 0.5,
-        TextScaled = true, Font = Enum.Font.Arcade,
-    }, Icon)
-    make("UITextSizeConstraint", { MaxTextSize = 58 }, hShadow)
-    local hFace = make("TextLabel", {
-        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "H",
-        TextColor3 = WHITE, TextScaled = true, Font = Enum.Font.Arcade,
-    }, Icon)
-    make("UITextSizeConstraint", { MaxTextSize = 58 }, hFace)
-    make("UIGradient", { Rotation = 90, Color = CHROME }, hFace)
 
-    -- Logo teks chrome blok 3D -----------------------------------------------------------------------
-    local LogoG = make("CanvasGroup", {
-        Size = UDim2.fromOffset(LOGO_W + 60, LOGO_H + 60), AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, LOGO_Y + 16), BackgroundTransparency = 1,
-        BorderSizePixel = 0, GroupTransparency = 1,
-    }, Gui)
-    local LogoScale = make("UIScale", {}, LogoG)
-
-    local sheenGrad
-    local function buildLogo(parent, chrome)
+    local function bar(x, y, w, h, r, color)
         local f = make("Frame", {
-            Size = UDim2.fromOffset(LOGO_W, LOGO_H), BackgroundTransparency = 1, BorderSizePixel = 0,
-        }, parent)
-        local function layer(offset, color, transparency)
-            local l = make("TextLabel", {
-                Size = UDim2.fromScale(1, 1), Position = UDim2.fromOffset(offset, offset),
-                BackgroundTransparency = 1, Text = "HUniversal", TextColor3 = color,
-                TextScaled = true, Font = Enum.Font.Arcade, TextTransparency = transparency or 0,
-            }, f)
-            make("UITextSizeConstraint", { MaxTextSize = 64 }, l)
-            return l
-        end
-        local DEPTH = 7
-        for i = DEPTH, 1, -1 do
-            local t = (i - 1) / (DEPTH - 1)
-            if chrome then
-                layer(i, Color3.fromRGB(96, 106, 126):Lerp(Color3.fromRGB(26, 30, 40), t))
-            else
-                layer(i, Color3.fromRGB(34, 38, 48), 0.2)
-            end
-        end
-        local face = layer(0, chrome and WHITE or Color3.fromRGB(66, 72, 86), chrome and 0 or 0.1)
-        if chrome then
-            make("UIGradient", { Rotation = 90, Color = CHROME }, face)
-            make("UIStroke", {
-                Color = Color3.fromRGB(22, 26, 36), Thickness = 2,
-                ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
-            }, face)
-            -- lapisan kilau: pita putih yang meluncur melintasi huruf
-            local sheen = layer(0, WHITE, 0)
-            sheenGrad = make("UIGradient", {
-                Rotation = 0, Offset = Vector2.new(-1, 0),
-                Transparency = seq({ { 0, 1 }, { 0.38, 1 }, { 0.5, 0 }, { 0.62, 1 }, { 1, 1 } }),
-            }, sheen)
-        end
+            Size = UDim2.fromOffset(w * K, h * K), Position = UDim2.fromOffset(x * K, y * K),
+            BackgroundColor3 = color or FRUIT, BorderSizePixel = 0,
+        }, Fruit)
+        corner(f, UDim.new(0, r * K))
         return f
     end
 
-    local Holder = make("Frame", {
-        Size = UDim2.fromOffset(LOGO_W, LOGO_H), AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, BorderSizePixel = 0,
-    }, LogoG)
-    buildLogo(Holder, false)
-    local Reveal = make("Frame", {
-        Size = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0),
+    -- Huruf H (kiri): dua batang + palang
+    bar(0, 18, 14, 82, 7)
+    bar(30, 18, 14, 82, 7)
+    bar(13, 53, 18, 12, 0)
+
+    -- Huruf U (kanan): batang kiri penuh, batang kanan lebih pendek (kesan "gigitan" apel)
+    bar(52, 18, 14, 66, 7)
+    bar(86, 34, 14, 50, 7)
+    -- dasar U: setengah cincin (cincin dipotong separuh bawah oleh ClipsDescendants)
+    local Bowl = make("Frame", {
+        Size = UDim2.fromOffset(48 * K, 24 * K), Position = UDim2.fromOffset(52 * K, 76 * K),
         BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true,
-    }, Holder)
-    local chromeLogo = buildLogo(Reveal, true)
-    chromeLogo.AnchorPoint = Vector2.new(1, 0)
-    chromeLogo.Position = UDim2.new(1, 0, 0, 0)
-    local Edge = make("Frame", {
-        Size = UDim2.new(0, 28, 1, 0), BackgroundColor3 = WHITE, BorderSizePixel = 0,
-    }, Reveal)
-    make("UIGradient", { Transparency = seq({ { 0, 0.3 }, { 1, 1 } }) }, Edge)
+    }, Fruit)
+    local Ring = make("Frame", {
+        Size = UDim2.fromOffset(20 * K, 20 * K), Position = UDim2.fromOffset(14 * K, -10 * K),
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, Bowl)
+    corner(Ring, UDim.new(0.5, 0))
+    make("UIStroke", {
+        Color = FRUIT, Thickness = 14 * K, ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, Ring)
+
+    -- Tangkai + daun di celah antara H dan U
+    local stem = bar(45.5, 2, 5, 20, 2.5)
+    stem.Rotation = 8
+    local leaf = bar(53, 1, 26, 12, 6, LEAF)
+    leaf.Rotation = -28
 
     -- Progress bar + status ---------------------------------------------------------------------------------
     local BarG = make("CanvasGroup", {
@@ -468,7 +443,7 @@ do
 
         for i, d in ipairs(orbit) do
             local ang = now * 1.7 + (i - 1) * (math.pi * 2 / #orbit)
-            local r = 74 + 4 * math.sin(now * 2 + i)
+            local r = 96 + 4 * math.sin(now * 2 + i)
             d.Position = UDim2.new(0.5, math.cos(ang) * r, 0.5, ICON_Y + math.sin(ang) * r * 0.92)
             d.BackgroundTransparency = 1 - 0.7 * orbitA * (0.55 + 0.45 * math.sin(ang + now))
         end
@@ -501,10 +476,6 @@ do
     tw(Glow, 0.9, { GroupTransparency = 0 })
     tw(IconG, 0.35, { GroupTransparency = 0 })
     tw(IconScale, 0.85, { Scale = 1 }, Enum.EasingStyle.Back)
-    task.delay(0.3, function()
-        if not Splash.alive then return end
-        tw(LogoG, 0.6, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, LOGO_Y) })
-    end)
     task.delay(0.55, function()
         if not Splash.alive then return end
         tw(BarG, 0.6, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, BAR_Y) })
@@ -514,17 +485,11 @@ do
     function Splash.reveal(dur)
         if not Splash.alive then return end
         prog.on, prog.start, prog.dur = true, os.clock(), dur
-        tw(Reveal, dur, { Size = UDim2.new(1, 0, 1, 0) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.delay(dur, function()
-            if Splash.alive then tw(Edge, 0.25, { BackgroundTransparency = 1 }) end
-        end)
     end
 
-    -- kilau melintasi huruf + ikon berdenyut
+    -- logo berdenyut sekali
     function Splash.sheen(dur)
-        if not Splash.alive or not sheenGrad then return end
-        sheenGrad.Offset = Vector2.new(-1, 0)
-        tw(sheenGrad, dur, { Offset = Vector2.new(1, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+        if not Splash.alive then return end
         tw(IconScale, dur * 0.45, { Scale = 1.14 }, Enum.EasingStyle.Quad)
         task.delay(dur * 0.45, function()
             if Splash.alive then tw(IconScale, dur * 0.55, { Scale = 1 }, Enum.EasingStyle.Back) end
@@ -561,14 +526,12 @@ do
         pcall(function() if blur then blur:Destroy() end end)
     end
 
-    -- ikon melesat ke tengah & membesar jadi jendela, sisanya memudar
+    -- logo melesat ke tengah & membesar jadi jendela, sisanya memudar
     function Splash.dissolve(dur)
         if not Splash.alive then return end
         orbitTarget = 0
         tw(IconG, dur, { Position = UDim2.new(0.5, 0, 0.5, 0), GroupTransparency = 1 }, Enum.EasingStyle.Quint)
-        tw(IconScale, dur, { Scale = 2.8 }, Enum.EasingStyle.Quint)
-        tw(LogoG, dur * 0.7, { GroupTransparency = 1 })
-        tw(LogoScale, dur * 0.7, { Scale = 1.15 }, Enum.EasingStyle.Quint)
+        tw(IconScale, dur, { Scale = 2.2 }, Enum.EasingStyle.Quint)
         tw(BarG, dur * 0.5, { GroupTransparency = 1 })
         tw(Glow, dur, { GroupTransparency = 1 })
         tw(Dim, dur, { BackgroundTransparency = 1 })
@@ -596,9 +559,9 @@ local TOP_H, SIDE_W = 46, 164
 
 local Main = make("Frame", {
     Name = "Main", Size = UDim2.new(0, WIN_W, 0, WIN_H),
-    Position = UDim2.new(0.5, -WIN_W / 2, 0.5, -WIN_H / 2),
+    AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
     BackgroundColor3 = "@BG", BackgroundTransparency = CONFIG.GlassTransparency,
-    BorderSizePixel = 0, ClipsDescendants = true,
+    BorderSizePixel = 0, ClipsDescendants = true, Active = true,
 }, ScreenGui)
 corner(Main, UDim.new(0, 26))
 local MainScale = make("UIScale", { Scale = 0.9 }, Main)
@@ -638,8 +601,9 @@ local TopLine = make("Frame", {
 make("UIGradient", { Transparency = seq({ {0, 1}, {0.5, 0.82}, {1, 1} }) }, TopLine)
 
 local function dot(x, color, glyph)
+    local D = UserInputService.TouchEnabled and 22 or 14
     local b = make("TextButton", {
-        Size = UDim2.fromOffset(14, 14), Position = UDim2.new(0, x, 0.5, -7),
+        Size = UDim2.fromOffset(D, D), Position = UDim2.new(0, x, 0.5, -D / 2),
         BackgroundColor3 = color, BorderSizePixel = 0, Text = "",
         TextColor3 = Color3.fromRGB(70, 30, 20), TextSize = 11, Font = F.Bold, AutoButtonColor = false,
     }, Top)
@@ -647,10 +611,12 @@ local function dot(x, color, glyph)
     make("UIStroke", { Color = Color3.new(0, 0, 0), Transparency = 0.85, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
     b.MouseEnter:Connect(function() b.Text = glyph end)
     b.MouseLeave:Connect(function() b.Text = "" end)
+    b.MouseButton1Down:Connect(function() playClick() end)
     return b
 end
-local CloseBtn = dot(18, Color3.fromRGB(255, 95, 87), "x")
-local MinBtn = dot(40, Color3.fromRGB(255, 189, 46), "-")
+local TOUCH_UI = UserInputService.TouchEnabled
+local CloseBtn = dot(TOUCH_UI and 14 or 18, Color3.fromRGB(255, 95, 87), "x")
+local MinBtn = dot(TOUCH_UI and 46 or 40, Color3.fromRGB(255, 189, 46), "-")
 
 -- Body
 local Body = make("Frame", {
@@ -744,12 +710,20 @@ end
 local minimized = false
 MinBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
+    -- AnchorPoint di tengah: geser posisi agar tepi atas jendela tetap di tempat
+    local dy = (TOP_H - WIN_H) / 2 * MainScale.Scale
     if minimized then
         Body.Visible = false
-        tw(Main, 0.45, { Size = UDim2.new(0, WIN_W, 0, TOP_H) }, Enum.EasingStyle.Quint)
+        tw(Main, 0.45, {
+            Size = UDim2.new(0, WIN_W, 0, TOP_H),
+            Position = Main.Position + UDim2.fromOffset(0, dy),
+        }, Enum.EasingStyle.Quint)
     else
         Body.Visible = true
-        tw(Main, 0.55, { Size = UDim2.new(0, WIN_W, 0, WIN_H) }, Enum.EasingStyle.Exponential)
+        tw(Main, 0.55, {
+            Size = UDim2.new(0, WIN_W, 0, WIN_H),
+            Position = Main.Position - UDim2.fromOffset(0, dy),
+        }, Enum.EasingStyle.Exponential)
     end
 end)
 
@@ -807,15 +781,31 @@ local function snapshot()
     end
 end
 
+-- Skala agar jendela muat di layar kecil (HP): maksimal 1, minimal 0.4
+local function fitScale()
+    local cam = Workspace.CurrentCamera
+    local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
+    local s = math.min((vp.X - 24) / WIN_W, (vp.Y - 24) / WIN_H, 1)
+    return math.max(s, 0.4)
+end
+
 local scaleFrom = 0.9
 local function applyProgress(v)
     local a = math.clamp(v * 1.5, 0, 1)
-    MainScale.Scale = scaleFrom + (1 - scaleFrom) * v
+    MainScale.Scale = fitScale() * (scaleFrom + (1 - scaleFrom) * v)
     for _, e in ipairs(fadeList) do
         e[1][e[2]] = 1 - (1 - e[3]) * a
     end
 end
 animValue.Changed:Connect(applyProgress)
+pcall(function()
+    local cam = Workspace.CurrentCamera
+    if cam then
+        track(cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            if animValue.Value > 0.99 then MainScale.Scale = fitScale() end
+        end))
+    end
+end)
 
 local function transition(target, dur, style, done)
     if animTween then animTween:Cancel() end
@@ -849,6 +839,70 @@ local function setVisible(v, done)
 end
 
 ------------------------------------------------------------------------
+-- TOMBOL MELAYANG (buka/tutup UI di HP, bisa dimatikan di Settings)
+------------------------------------------------------------------------
+local closing = false
+
+local function floatWanted()
+    if CONFIG.FloatButton == "auto" then
+        return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    end
+    return CONFIG.FloatButton == true
+end
+
+local FloatBtn = make("TextButton", {
+    Name = "FloatToggle", Size = UDim2.fromOffset(52, 52), AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0, 40, 0.5, 0), BackgroundColor3 = "@ACCENT", BackgroundTransparency = 0.15,
+    BorderSizePixel = 0, Text = "HU", TextColor3 = "@TEXT", TextSize = 18, Font = F.Bold,
+    AutoButtonColor = false, Visible = false,
+}, ScreenGui)
+corner(FloatBtn, PILL)
+rim(FloatBtn, 1.5, 45, false)
+local FloatScale = make("UIScale", {}, FloatBtn)
+
+local function applyFloat()
+    FloatBtn.Visible = floatWanted() and not Splash.introActive and not closing
+end
+
+-- Geser untuk memindahkan, ketuk untuk buka/tutup
+do
+    local dragging, moved, dragStart, startCenter = false, false, nil, nil
+    FloatBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging, moved = true, false
+            dragStart = input.Position
+            startCenter = FloatBtn.AbsolutePosition + FloatBtn.AbsoluteSize / 2
+            tw(FloatScale, 0.1, { Scale = 0.92 })
+        end
+    end)
+    track(UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            local d = input.Position - dragStart
+            if d.Magnitude > 8 then moved = true end
+            if moved then
+                local vp = ScreenGui.AbsoluteSize
+                local x = math.clamp(startCenter.X + d.X, 26, math.max(26, vp.X - 26))
+                local y = math.clamp(startCenter.Y + d.Y, 26, math.max(26, vp.Y - 26))
+                FloatBtn.Position = UDim2.fromOffset(x, y)
+            end
+        end
+    end))
+    track(UserInputService.InputEnded:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            dragging = false
+            tw(FloatScale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+            if not moved and not Splash.introActive and not closing then
+                playClick()
+                setVisible(not shown)
+            end
+        end
+    end))
+end
+
+------------------------------------------------------------------------
 -- UI HELPERS
 ------------------------------------------------------------------------
 local function button(parent, text, accent, props)
@@ -866,7 +920,10 @@ local function button(parent, text, accent, props)
         tw(b, 0.2, { BackgroundTransparency = baseT })
         tw(sc, 0.2, { Scale = 1 })
     end)
-    b.MouseButton1Down:Connect(function() tw(sc, 0.1, { Scale = 0.94 }) end)
+    b.MouseButton1Down:Connect(function()
+        playClick()
+        tw(sc, 0.1, { Scale = 0.94 })
+    end)
     b.MouseButton1Up:Connect(function() tw(sc, 0.25, { Scale = 1 }, Enum.EasingStyle.Back) end)
     return b
 end
@@ -940,6 +997,7 @@ local function spotlight(parent, props, placeholder)
     }, wrap)
     corner(clear, PILL)
     clear.MouseButton1Click:Connect(function()
+        playClick(1.2)
         box.Text = ""
         box:CaptureFocus()
     end)
@@ -996,7 +1054,10 @@ local function makeSwitch(parent, rightOffset, onChange)
         if not silent and onChange then onChange(on) end
     end
     function obj.get() return on end
-    trackBtn.MouseButton1Click:Connect(function() obj.set(not on) end)
+    trackBtn.MouseButton1Click:Connect(function()
+        obj.set(not on)
+        playClick(on and 1.2 or 0.9)
+    end)
     table.insert(themeHooks, function() refresh(false) end)
     return obj
 end
@@ -1109,7 +1170,10 @@ local function addTab(name, order, glyph, iconColor)
         Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
     }, btn)
 
-    btn.MouseButton1Click:Connect(function() selectTab(name) end)
+    btn.MouseButton1Click:Connect(function()
+        if currentTab ~= name then playClick(1.1) end
+        selectTab(name)
+    end)
     btn.MouseEnter:Connect(function()
         if currentTab ~= name then tw(label, 0.15, { TextColor3 = C.TEXT }) end
     end)
@@ -1346,97 +1410,98 @@ local function makeListKit(Cards)
     return newGroup, newRow, groups
 end
 
-    -- Slider ala iOS ------------------------------------------------------------
-    local function makeSlider(parent, pos, size, min, max, default, onChange, onDisplay, onCommit)
-        local hit = make("TextButton", {
-            Size = size, Position = pos, BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
-        }, parent)
-        local rail = make("Frame", {
-            Size = UDim2.new(1, 0, 0, 6), Position = UDim2.new(0, 0, 0.5, -3),
-            BackgroundColor3 = "@BTN", BackgroundTransparency = 0.7, BorderSizePixel = 0,
-        }, hit)
-        corner(rail, PILL)
-        local fill = make("Frame", {
-            Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = "@ACCENT", BorderSizePixel = 0,
-        }, rail)
-        corner(fill, PILL)
-        local knob = make("Frame", {
-            Size = UDim2.fromOffset(22, 22), AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.new(0, 0, 0.5, 0), BackgroundColor3 = Color3.new(1, 1, 1),
-            BorderSizePixel = 0,
-        }, hit)
-        corner(knob, PILL)
-        make("UIStroke", { Color = Color3.new(0, 0, 0), Transparency = 0.82, Thickness = 1,
-            ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, knob)
-        local ks = make("UIScale", {}, knob)
+-- Slider ala iOS ------------------------------------------------------------
+local function makeSlider(parent, pos, size, min, max, default, onChange, onDisplay, onCommit)
+    local hit = make("TextButton", {
+        Size = size, Position = pos, BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
+    }, parent)
+    local rail = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 6), Position = UDim2.new(0, 0, 0.5, -3),
+        BackgroundColor3 = "@BTN", BackgroundTransparency = 0.7, BorderSizePixel = 0,
+    }, hit)
+    corner(rail, PILL)
+    local fill = make("Frame", {
+        Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = "@ACCENT", BorderSizePixel = 0,
+    }, rail)
+    corner(fill, PILL)
+    local knob = make("Frame", {
+        Size = UDim2.fromOffset(22, 22), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0, 0, 0.5, 0), BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+    }, hit)
+    corner(knob, PILL)
+    make("UIStroke", { Color = Color3.new(0, 0, 0), Transparency = 0.82, Thickness = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, knob)
+    local ks = make("UIScale", {}, knob)
 
-        local obj = { value = default }
-        function obj.set(v, silent, animate)
-            obj.value = v
-            local a = math.clamp((v - min) / (max - min), 0, 1)
-            local t = animate and 0.18 or 0
-            tw(fill, t, { Size = UDim2.new(a, 0, 1, 0) })
-            tw(knob, t, { Position = UDim2.new(a, 0, 0.5, 0) })
-            if onDisplay then onDisplay(v) end
-            if not silent and onChange then onChange(v) end
-        end
-
-        local dragging = false
-        local function fromX(x)
-            local w = hit.AbsoluteSize.X
-            if w <= 0 then return end
-            local a = math.clamp((x - hit.AbsolutePosition.X) / w, 0, 1)
-            obj.set(math.floor(min + (max - min) * a + 0.5))
-        end
-        hit.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                tw(ks, 0.12, { Scale = 1.2 })
-                fromX(input.Position.X)
-            end
-        end)
-        track(UserInputService.InputChanged:Connect(function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-                or input.UserInputType == Enum.UserInputType.Touch) then
-                fromX(input.Position.X)
-            end
-        end))
-        track(UserInputService.InputEnded:Connect(function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch) then
-                dragging = false
-                tw(ks, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
-                if onCommit then onCommit(obj.value) end
-            end
-        end))
-
-        obj.set(default, true, false)
-        return obj
+    local obj = { value = default }
+    function obj.set(v, silent, animate)
+        obj.value = v
+        local a = math.clamp((v - min) / (max - min), 0, 1)
+        local t = animate and 0.18 or 0
+        tw(fill, t, { Size = UDim2.new(a, 0, 1, 0) })
+        tw(knob, t, { Position = UDim2.new(a, 0, 0.5, 0) })
+        if onDisplay then onDisplay(v) end
+        if not silent and onChange then onChange(v) end
     end
 
-    -- Baris kedua: slider + kotak angka (bisa diketik, nilai di luar rentang slider tetap diterima)
-    local function addSlider(row, firstH, min, max, default, onChange, onCommit)
-        local box
-        local sl = makeSlider(row, UDim2.new(0, 50, 0, firstH + 2), UDim2.new(1, -132, 0, 24),
-            min, max, default, onChange,
-            function(v) if box then box.Text = tostring(v) end end, onCommit)
-        box = textbox(row, {
-            Size = UDim2.new(0, 56, 0, 24), AnchorPoint = Vector2.new(1, 0),
-            Position = UDim2.new(1, -12, 0, firstH + 2), Text = tostring(default),
-            TextXAlignment = Enum.TextXAlignment.Center,
-        })
-        box.FocusLost:Connect(function()
-            local v = tonumber(box.Text)
-            if v then
-                sl.set(v, false, true)
-                if onCommit then onCommit(v) end
-            else
-                box.Text = tostring(sl.value)
-            end
-        end)
-        return sl
+    local dragging = false
+    local function fromX(x)
+        local w = hit.AbsoluteSize.X
+        if w <= 0 then return end
+        local a = math.clamp((x - hit.AbsolutePosition.X) / w, 0, 1)
+        obj.set(math.floor(min + (max - min) * a + 0.5))
     end
+    hit.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            playClick(1.3)
+            tw(ks, 0.12, { Scale = 1.2 })
+            fromX(input.Position.X)
+        end
+    end)
+    track(UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            fromX(input.Position.X)
+        end
+    end))
+    track(UserInputService.InputEnded:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            dragging = false
+            tw(ks, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
+            if onCommit then onCommit(obj.value) end
+        end
+    end))
+
+    obj.set(default, true, false)
+    return obj
+end
+
+-- Baris kedua: slider + kotak angka (bisa diketik, nilai di luar rentang slider tetap diterima)
+local function addSlider(row, firstH, min, max, default, onChange, onCommit)
+    local box
+    local sl = makeSlider(row, UDim2.new(0, 50, 0, firstH + 2), UDim2.new(1, -132, 0, 24),
+        min, max, default, onChange,
+        function(v) if box then box.Text = tostring(v) end end, onCommit)
+    box = textbox(row, {
+        Size = UDim2.new(0, 56, 0, 24), AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -12, 0, firstH + 2), Text = tostring(default),
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+    box.FocusLost:Connect(function()
+        local v = tonumber(box.Text)
+        if v then
+            sl.set(v, false, true)
+            if onCommit then onCommit(v) end
+        else
+            box.Text = tostring(sl.value)
+        end
+    end)
+    return sl
+end
 
 local function buildHubPage()
     -- Judul besar + search ala iOS
@@ -2165,8 +2230,14 @@ local function buildServersPage()
         renderServers()
         fetchServers(true)
     end
-    SortMost.MouseButton1Click:Connect(function() changeSort("most") end)
-    SortLeast.MouseButton1Click:Connect(function() changeSort("least") end)
+    SortMost.MouseButton1Click:Connect(function()
+        if srvSort ~= "most" then playClick(1.1) end
+        changeSort("most")
+    end)
+    SortLeast.MouseButton1Click:Connect(function()
+        if srvSort ~= "least" then playClick(1.1) end
+        changeSort("least")
+    end)
     SrvRefresh.MouseButton1Click:Connect(function()
         tw(SrvRefresh, 0.5, { Rotation = SrvRefresh.Rotation + 360 })
         srvPage = 1
@@ -2196,7 +2267,7 @@ newConsole(ConsolePage, { Size = UDim2.new(1, -24, 1, -50), Position = UDim2.new
 ------------------------------------------------------------------------
 -- SETTINGS PAGE
 ------------------------------------------------------------------------
-local keyBtn, blurSwitch, unloadBtn
+local keyBtn, blurSwitch, soundSwitch, unloadBtn
 local binding = false
 
 local okKey, savedKey = pcall(function() return Enum.KeyCode[CONFIG.ToggleKey] end)
@@ -2250,6 +2321,7 @@ local function saveConfig(manual)
         writefile(SAVE_FILE, HttpService:JSONEncode({
             Colors = CONFIG.Colors, ToggleKey = toggleKey.Name, Keybinds = CONFIG.Keybinds,
             GlassTransparency = CONFIG.GlassTransparency, Blur = CONFIG.Blur,
+            Sound = CONFIG.Sound,
         }))
     end)
     if ok then
@@ -2339,6 +2411,13 @@ local function buildSettingsPage()
         scheduleSave()
     end)
 
+    local _, lSnd = newRow(gGen, "Sound Effects", "Suara saat menekan tombol",
+        "🔊", Color3.fromRGB(52, 199, 89), false)
+    soundSwitch = makeSwitch(lSnd, 12, function(on)
+        CONFIG.Sound = on
+        scheduleSave()
+    end)
+
     local _, lReset = newRow(gGen, "Reset Humanoid & FOV", "Kembalikan kecepatan, lompat, dan FOV",
         "↺", Color3.fromRGB(255, 159, 10), false)
     local resetBtn = actionButton(lReset, "Reset", false, 12, 80)
@@ -2387,6 +2466,7 @@ local function buildSettingsPage()
         pb.MouseEnter:Connect(function() tw(sc, 0.15, { Scale = 1.12 }) end)
         pb.MouseLeave:Connect(function() tw(sc, 0.2, { Scale = 1 }) end)
         pb.MouseButton1Click:Connect(function()
+            playClick(1.15)
             setThemeColors({ Accent = pr[2], AccentHover = pr[3] })
         end)
     end
@@ -2501,10 +2581,11 @@ corner(creditLine, PILL)
 -- START
 ------------------------------------------------------------------------
 if CONFIG.Blur then blurSwitch.set(true, true) end
+if CONFIG.Sound then soundSwitch.set(true, true) end
 selectTab("Script Hub")
 
--- Intro ala aplikasi: ikon + logo chrome terisi kanan->kiri, kilau, lalu zoom ke jendela
-local INTRO_TIME = 3 -- durasi pengisian logo / progress (detik)
+-- Intro ala aplikasi: logo buah "HU" + progress, lalu zoom ke jendela
+local INTRO_TIME = 3 -- durasi pengisian progress (detik)
 local function playIntro()
     Splash.started = true
     shown = true
