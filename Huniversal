@@ -207,7 +207,7 @@ end
 -- CONTAINER
 ------------------------------------------------------------------------
 local ScreenGui = make("ScreenGui", {
-    Name = "HUniversalUI", ResetOnSpawn = false, IgnoreGuiInset = true,
+    Name = "HUniversalUI", ResetOnSpawn = false, IgnoreGuiInset = true, Enabled = false,
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 })
 
@@ -225,12 +225,368 @@ else
 end
 
 for _, child in ipairs(parentTarget:GetChildren()) do
-    if child.Name == "HUniversalUI" or child.Name == "OpiumHubUI" then child:Destroy() end
+    if child.Name == "HUniversalUI" or child.Name == "OpiumHubUI" or child.Name == "HUniversalSplash" then
+        child:Destroy()
+    end
 end
 for _, child in ipairs(Lighting:GetChildren()) do
-    if child.Name == "HUniversalBlur" then child:Destroy() end
+    if child.Name == "HUniversalBlur" or child.Name == "HUniversalSplashBlur" then child:Destroy() end
 end
 ScreenGui.Parent = parentTarget
+
+------------------------------------------------------------------------
+-- INTRO ALA APLIKASI (blur + ikon + logo chrome + progress + zoom ke jendela)
+------------------------------------------------------------------------
+local Splash = { started = false, alive = true, introActive = true }
+do
+    local LOGO_W, LOGO_H = 420, 80
+    local ICON_Y, LOGO_Y, BAR_Y = -84, 16, 96 -- posisi vertikal relatif ke tengah layar
+    local WHITE = Color3.new(1, 1, 1)
+    local rng = Random.new()
+
+    local Gui = make("ScreenGui", {
+        Name = "HUniversalSplash", ResetOnSpawn = false, IgnoreGuiInset = true,
+        DisplayOrder = 1000, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    })
+    if syn and syn.protect_gui and not gethui then pcall(syn.protect_gui, Gui) end
+    Gui.Parent = parentTarget
+
+    local blur
+    pcall(function()
+        blur = Instance.new("BlurEffect")
+        blur.Name = "HUniversalSplashBlur"
+        blur.Size = 0
+        blur.Parent = Lighting
+    end)
+
+    local CHROME = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.40, Color3.fromRGB(210, 216, 228)),
+        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(104, 112, 130)),
+        ColorSequenceKeypoint.new(0.58, Color3.fromRGB(184, 192, 208)),
+        ColorSequenceKeypoint.new(0.82, Color3.fromRGB(236, 240, 246)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 158, 174)),
+    })
+
+    -- Latar: gelap + rona warna aksen dari bawah ------------------------------------
+    local Dim = make("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(6, 8, 14),
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, Gui)
+    local Tint = make("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.ACCENT,
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, Gui)
+    make("UIGradient", { Rotation = 90, Transparency = seq({ { 0, 1 }, { 0.5, 0.96 }, { 1, 0.74 } }) }, Tint)
+
+    -- Partikel bokeh melayang naik ----------------------------------------------------
+    local Fx = make("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, Gui)
+    local bokeh = {}
+    for i = 1, 18 do
+        local sz = rng:NextInteger(3, 9)
+        local f = make("Frame", {
+            Size = UDim2.fromOffset(sz, sz), AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = WHITE, BackgroundTransparency = 1, BorderSizePixel = 0,
+        }, Fx)
+        corner(f, PILL)
+        bokeh[i] = {
+            f = f, x = rng:NextNumber(), y = rng:NextNumber(),
+            speed = rng:NextNumber(12, 34), base = rng:NextNumber(0.86, 0.95),
+        }
+    end
+
+    -- Glow di belakang ikon (lingkaran bertumpuk) ------------------------------------------
+    local Glow = make("CanvasGroup", {
+        Size = UDim2.fromOffset(400, 400), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, ICON_Y), BackgroundTransparency = 1,
+        BorderSizePixel = 0, GroupTransparency = 1,
+    }, Gui)
+    local GlowScale = make("UIScale", {}, Glow)
+    for i = 1, 8 do
+        local d = 120 + i * 30
+        local c = make("Frame", {
+            Size = UDim2.fromOffset(d, d), AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = C.ACCENT,
+            BackgroundTransparency = 0.94, BorderSizePixel = 0,
+        }, Glow)
+        corner(c, PILL)
+    end
+
+    -- Titik yang mengorbit ikon --------------------------------------------------------------
+    local orbit = {}
+    for i = 1, 6 do
+        local d = make("Frame", {
+            Size = UDim2.fromOffset(5, 5), AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = WHITE, BackgroundTransparency = 1, BorderSizePixel = 0,
+        }, Fx)
+        corner(d, PILL)
+        orbit[i] = d
+    end
+
+    -- Ikon aplikasi (squircle kaca dengan huruf H chrome) ------------------------------------------
+    local IconG = make("CanvasGroup", {
+        Size = UDim2.fromOffset(130, 130), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, ICON_Y), BackgroundTransparency = 1,
+        BorderSizePixel = 0, GroupTransparency = 1,
+    }, Gui)
+    local IconScale = make("UIScale", { Scale = 0.4 }, IconG)
+    local Icon = make("Frame", {
+        Size = UDim2.fromOffset(92, 92), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0,
+    }, IconG)
+    corner(Icon, UDim.new(0, 26))
+    make("UIGradient", {
+        Rotation = 70,
+        Color = ColorSequence.new(C.ACCENT2:Lerp(WHITE, 0.2), C.ACCENT:Lerp(Color3.new(0, 0, 0), 0.3)),
+    }, Icon)
+    rim(Icon, 1.5, 45, false)
+    local iconGloss = make("Frame", {
+        Size = UDim2.new(1, 0, 0.55, 0), BackgroundColor3 = WHITE, BorderSizePixel = 0,
+    }, Icon)
+    corner(iconGloss, UDim.new(0, 26))
+    make("UIGradient", { Rotation = 90, Transparency = seq({ { 0, 0.68 }, { 1, 1 } }) }, iconGloss)
+    local hShadow = make("TextLabel", {
+        Size = UDim2.fromScale(1, 1), Position = UDim2.fromOffset(0, 3), BackgroundTransparency = 1,
+        Text = "H", TextColor3 = Color3.fromRGB(8, 24, 80), TextTransparency = 0.5,
+        TextScaled = true, Font = Enum.Font.Arcade,
+    }, Icon)
+    make("UITextSizeConstraint", { MaxTextSize = 58 }, hShadow)
+    local hFace = make("TextLabel", {
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "H",
+        TextColor3 = WHITE, TextScaled = true, Font = Enum.Font.Arcade,
+    }, Icon)
+    make("UITextSizeConstraint", { MaxTextSize = 58 }, hFace)
+    make("UIGradient", { Rotation = 90, Color = CHROME }, hFace)
+
+    -- Logo teks chrome blok 3D -----------------------------------------------------------------------
+    local LogoG = make("CanvasGroup", {
+        Size = UDim2.fromOffset(LOGO_W + 60, LOGO_H + 60), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, LOGO_Y + 16), BackgroundTransparency = 1,
+        BorderSizePixel = 0, GroupTransparency = 1,
+    }, Gui)
+    local LogoScale = make("UIScale", {}, LogoG)
+
+    local sheenGrad
+    local function buildLogo(parent, chrome)
+        local f = make("Frame", {
+            Size = UDim2.fromOffset(LOGO_W, LOGO_H), BackgroundTransparency = 1, BorderSizePixel = 0,
+        }, parent)
+        local function layer(offset, color, transparency)
+            local l = make("TextLabel", {
+                Size = UDim2.fromScale(1, 1), Position = UDim2.fromOffset(offset, offset),
+                BackgroundTransparency = 1, Text = "HUniversal", TextColor3 = color,
+                TextScaled = true, Font = Enum.Font.Arcade, TextTransparency = transparency or 0,
+            }, f)
+            make("UITextSizeConstraint", { MaxTextSize = 64 }, l)
+            return l
+        end
+        local DEPTH = 7
+        for i = DEPTH, 1, -1 do
+            local t = (i - 1) / (DEPTH - 1)
+            if chrome then
+                layer(i, Color3.fromRGB(96, 106, 126):Lerp(Color3.fromRGB(26, 30, 40), t))
+            else
+                layer(i, Color3.fromRGB(34, 38, 48), 0.2)
+            end
+        end
+        local face = layer(0, chrome and WHITE or Color3.fromRGB(66, 72, 86), chrome and 0 or 0.1)
+        if chrome then
+            make("UIGradient", { Rotation = 90, Color = CHROME }, face)
+            make("UIStroke", {
+                Color = Color3.fromRGB(22, 26, 36), Thickness = 2,
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+            }, face)
+            -- lapisan kilau: pita putih yang meluncur melintasi huruf
+            local sheen = layer(0, WHITE, 0)
+            sheenGrad = make("UIGradient", {
+                Rotation = 0, Offset = Vector2.new(-1, 0),
+                Transparency = seq({ { 0, 1 }, { 0.38, 1 }, { 0.5, 0 }, { 0.62, 1 }, { 1, 1 } }),
+            }, sheen)
+        end
+        return f
+    end
+
+    local Holder = make("Frame", {
+        Size = UDim2.fromOffset(LOGO_W, LOGO_H), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, LogoG)
+    buildLogo(Holder, false)
+    local Reveal = make("Frame", {
+        Size = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true,
+    }, Holder)
+    local chromeLogo = buildLogo(Reveal, true)
+    chromeLogo.AnchorPoint = Vector2.new(1, 0)
+    chromeLogo.Position = UDim2.new(1, 0, 0, 0)
+    local Edge = make("Frame", {
+        Size = UDim2.new(0, 28, 1, 0), BackgroundColor3 = WHITE, BorderSizePixel = 0,
+    }, Reveal)
+    make("UIGradient", { Transparency = seq({ { 0, 0.3 }, { 1, 1 } }) }, Edge)
+
+    -- Progress bar + status ---------------------------------------------------------------------------------
+    local BarG = make("CanvasGroup", {
+        Size = UDim2.fromOffset(320, 48), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, BAR_Y + 14), BackgroundTransparency = 1,
+        BorderSizePixel = 0, GroupTransparency = 1,
+    }, Gui)
+    local Track = make("Frame", {
+        Size = UDim2.new(1, -20, 0, 6), Position = UDim2.fromOffset(10, 6),
+        BackgroundColor3 = WHITE, BackgroundTransparency = 0.82, BorderSizePixel = 0,
+    }, BarG)
+    corner(Track, PILL)
+    local Fill = make("Frame", {
+        Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = WHITE, BorderSizePixel = 0,
+    }, Track)
+    corner(Fill, PILL)
+    make("UIGradient", { Color = ColorSequence.new(C.ACCENT, C.ACCENT2:Lerp(WHITE, 0.45)) }, Fill)
+    local Status = make("TextLabel", {
+        Size = UDim2.new(0.7, 0, 0, 16), Position = UDim2.fromOffset(10, 20), BackgroundTransparency = 1,
+        Text = "Initializing", TextColor3 = C.MUTED, TextSize = 11, Font = F.Medium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, BarG)
+    local Pct = make("TextLabel", {
+        Size = UDim2.new(0.3, 0, 0, 16), Position = UDim2.new(0.7, -10, 0, 20), BackgroundTransparency = 1,
+        Text = "0%", TextColor3 = C.TEXT, TextSize = 11, Font = F.Bold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    }, BarG)
+
+    -- Loop animasi (glow berdenyut, orbit, bokeh, progress) ---------------------------------------------------
+    local t0 = os.clock()
+    local orbitA, orbitTarget = 0, 1
+    local prog = { on = false, start = 0, dur = 1 }
+    local conn
+    conn = RunService.RenderStepped:Connect(function(dt)
+        if not Splash.alive then
+            conn:Disconnect()
+            return
+        end
+        local now = os.clock() - t0
+        orbitA += (orbitTarget - orbitA) * math.min(1, dt * 3)
+        GlowScale.Scale = 1 + 0.05 * math.sin(now * 2.2)
+
+        for i, d in ipairs(orbit) do
+            local ang = now * 1.7 + (i - 1) * (math.pi * 2 / #orbit)
+            local r = 74 + 4 * math.sin(now * 2 + i)
+            d.Position = UDim2.new(0.5, math.cos(ang) * r, 0.5, ICON_Y + math.sin(ang) * r * 0.92)
+            d.BackgroundTransparency = 1 - 0.7 * orbitA * (0.55 + 0.45 * math.sin(ang + now))
+        end
+
+        local H = math.max(Gui.AbsoluteSize.Y, 400)
+        for _, b in ipairs(bokeh) do
+            b.y -= b.speed * dt / H
+            if b.y < -0.03 then
+                b.y = 1.03
+                b.x = rng:NextNumber()
+            end
+            b.f.Position = UDim2.new(b.x, 0, b.y, 0)
+            b.f.BackgroundTransparency = 1 - (1 - b.base) * orbitA
+        end
+
+        if prog.on then
+            local u = math.clamp((os.clock() - prog.start) / prog.dur, 0, 1)
+            local p = (1 - math.cos(math.pi * u)) / 2 -- sama dengan Sine InOut
+            Fill.Size = UDim2.new(p, 0, 1, 0)
+            Pct.Text = ("%d%%"):format(math.floor(p * 100 + 0.5))
+            Status.Text = (p < 0.15 and "Initializing") or (p < 0.4 and "Loading interface")
+                or (p < 0.7 and "Preparing modules") or (p < 0.97 and "Connecting") or "Ready"
+        end
+    end)
+
+    -- Animasi masuk (berurutan, ala app launch) --------------------------------------------------------------------
+    tw(Dim, 0.5, { BackgroundTransparency = 0.4 })
+    tw(Tint, 0.9, { BackgroundTransparency = 0 })
+    if blur then tw(blur, 0.5, { Size = 28 }) end
+    tw(Glow, 0.9, { GroupTransparency = 0 })
+    tw(IconG, 0.35, { GroupTransparency = 0 })
+    tw(IconScale, 0.85, { Scale = 1 }, Enum.EasingStyle.Back)
+    task.delay(0.3, function()
+        if not Splash.alive then return end
+        tw(LogoG, 0.6, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, LOGO_Y) })
+    end)
+    task.delay(0.55, function()
+        if not Splash.alive then return end
+        tw(BarG, 0.6, { GroupTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, BAR_Y) })
+    end)
+
+    -- API -----------------------------------------------------------------------------------------------------------------
+    function Splash.reveal(dur)
+        if not Splash.alive then return end
+        prog.on, prog.start, prog.dur = true, os.clock(), dur
+        tw(Reveal, dur, { Size = UDim2.new(1, 0, 1, 0) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.delay(dur, function()
+            if Splash.alive then tw(Edge, 0.25, { BackgroundTransparency = 1 }) end
+        end)
+    end
+
+    -- kilau melintasi huruf + ikon berdenyut
+    function Splash.sheen(dur)
+        if not Splash.alive or not sheenGrad then return end
+        sheenGrad.Offset = Vector2.new(-1, 0)
+        tw(sheenGrad, dur, { Offset = Vector2.new(1, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+        tw(IconScale, dur * 0.45, { Scale = 1.14 }, Enum.EasingStyle.Quad)
+        task.delay(dur * 0.45, function()
+            if Splash.alive then tw(IconScale, dur * 0.55, { Scale = 1 }, Enum.EasingStyle.Back) end
+        end)
+    end
+
+    -- gelombang cincin dari titik tengah layar
+    function Splash.ripple()
+        local function ring(color, delay, thickness)
+            task.delay(delay, function()
+                if not Splash.alive then return end
+                local r = make("Frame", {
+                    Size = UDim2.fromOffset(100, 100), AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, BorderSizePixel = 0,
+                }, Gui)
+                corner(r, PILL)
+                local st = make("UIStroke", {
+                    Color = color, Thickness = thickness, Transparency = 0.15,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                }, r)
+                tw(r, 1, { Size = UDim2.fromOffset(1500, 1500) }, Enum.EasingStyle.Quint)
+                tw(st, 1, { Transparency = 1 }, Enum.EasingStyle.Quad)
+                task.delay(1.1, function() pcall(function() r:Destroy() end) end)
+            end)
+        end
+        ring(WHITE, 0, 3)
+        ring(C.ACCENT2, 0.12, 2)
+    end
+
+    function Splash.destroy()
+        if not Splash.alive then return end
+        Splash.alive = false
+        pcall(function() Gui:Destroy() end)
+        pcall(function() if blur then blur:Destroy() end end)
+    end
+
+    -- ikon melesat ke tengah & membesar jadi jendela, sisanya memudar
+    function Splash.dissolve(dur)
+        if not Splash.alive then return end
+        orbitTarget = 0
+        tw(IconG, dur, { Position = UDim2.new(0.5, 0, 0.5, 0), GroupTransparency = 1 }, Enum.EasingStyle.Quint)
+        tw(IconScale, dur, { Scale = 2.8 }, Enum.EasingStyle.Quint)
+        tw(LogoG, dur * 0.7, { GroupTransparency = 1 })
+        tw(LogoScale, dur * 0.7, { Scale = 1.15 }, Enum.EasingStyle.Quint)
+        tw(BarG, dur * 0.5, { GroupTransparency = 1 })
+        tw(Glow, dur, { GroupTransparency = 1 })
+        tw(Dim, dur, { BackgroundTransparency = 1 })
+        tw(Tint, dur, { BackgroundTransparency = 1 })
+        if blur then tw(blur, dur, { Size = 0 }) end
+        task.delay(dur + 0.2, Splash.destroy)
+    end
+
+    -- pengaman: kalau UI gagal dibangun, jangan biarkan layar tertahan
+    task.delay(10, function()
+        if Splash.alive and not Splash.started then
+            Splash.destroy()
+            ScreenGui.Enabled = true
+        end
+    end)
+
+    task.wait() -- beri satu frame agar intro tampil sebelum UI utama dibangun
+end
 
 ------------------------------------------------------------------------
 -- WINDOW (kaca)
@@ -451,9 +807,10 @@ local function snapshot()
     end
 end
 
+local scaleFrom = 0.9
 local function applyProgress(v)
     local a = math.clamp(v * 1.5, 0, 1)
-    MainScale.Scale = 0.9 + 0.1 * v
+    MainScale.Scale = scaleFrom + (1 - scaleFrom) * v
     for _, e in ipairs(fadeList) do
         e[1][e[2]] = 1 - (1 - e[3]) * a
     end
@@ -525,6 +882,86 @@ local function textbox(parent, props)
     t.Focused:Connect(function() tw(t, 0.15, { BackgroundTransparency = 0.7 }) end)
     t.FocusLost:Connect(function() tw(t, 0.2, { BackgroundTransparency = 0.86 }) end)
     return t
+end
+
+-- Search ala Spotlight (macOS): kaca lebar, kaca pembesar, teks besar, cincin aksen saat fokus
+local function spotlight(parent, props, placeholder)
+    local wrap = make("Frame", merge({
+        Size = UDim2.new(1, -24, 0, 38),
+        BackgroundColor3 = "@BTN", BackgroundTransparency = 0.8, BorderSizePixel = 0,
+    }, props), parent)
+    corner(wrap, UDim.new(0, 14))
+    rim(wrap, 1, 45, true)
+    local sc = make("UIScale", {}, wrap)
+
+    -- cincin fokus
+    local ring = make("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, wrap)
+    corner(ring, UDim.new(0, 14))
+    local ringStroke = make("UIStroke", {
+        Color = "@ACCENT", Thickness = 1.5, Transparency = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, ring)
+
+    -- ikon kaca pembesar (digambar dari bentuk, bukan emoji)
+    local icon = make("Frame", {
+        Size = UDim2.fromOffset(18, 18), Position = UDim2.new(0, 14, 0.5, -9), BackgroundTransparency = 1,
+    }, wrap)
+    local lens = make("Frame", {
+        Size = UDim2.fromOffset(10, 10), Position = UDim2.fromOffset(2, 2),
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, icon)
+    corner(lens, PILL)
+    local lensStroke = make("UIStroke", {
+        Color = "@MUTED", Thickness = 1.8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, lens)
+    local handle = make("Frame", {
+        Size = UDim2.fromOffset(7, 2), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(14, 14), Rotation = 45,
+        BackgroundColor3 = "@MUTED", BorderSizePixel = 0,
+    }, icon)
+    corner(handle, PILL)
+
+    local box = make("TextBox", {
+        Size = UDim2.new(1, -78, 1, 0), Position = UDim2.new(0, 42, 0, 0),
+        BackgroundTransparency = 1, BorderSizePixel = 0, Text = "",
+        PlaceholderText = placeholder or "Spotlight Search", PlaceholderColor3 = "@MUTED",
+        TextColor3 = "@TEXT", TextSize = 16, Font = F.Medium,
+        TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false,
+        ClipsDescendants = true,
+    }, wrap)
+
+    local clear = make("TextButton", {
+        Size = UDim2.fromOffset(18, 18), AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -12, 0.5, 0), BackgroundColor3 = "@MUTED",
+        BackgroundTransparency = 0.5, BorderSizePixel = 0, Text = "x", TextColor3 = "@TEXT",
+        TextSize = 11, Font = F.Bold, AutoButtonColor = false, Visible = false,
+    }, wrap)
+    corner(clear, PILL)
+    clear.MouseButton1Click:Connect(function()
+        box.Text = ""
+        box:CaptureFocus()
+    end)
+    box:GetPropertyChangedSignal("Text"):Connect(function()
+        clear.Visible = box.Text ~= ""
+    end)
+
+    box.Focused:Connect(function()
+        tw(wrap, 0.2, { BackgroundTransparency = 0.68 })
+        tw(ringStroke, 0.2, { Transparency = 0.25 })
+        tw(sc, 0.35, { Scale = 1.012 }, Enum.EasingStyle.Back)
+        tw(lensStroke, 0.2, { Color = C.TEXT })
+        tw(handle, 0.2, { BackgroundColor3 = C.TEXT })
+    end)
+    box.FocusLost:Connect(function()
+        tw(wrap, 0.25, { BackgroundTransparency = 0.8 })
+        tw(ringStroke, 0.25, { Transparency = 1 })
+        tw(sc, 0.25, { Scale = 1 })
+        tw(lensStroke, 0.25, { Color = C.MUTED })
+        tw(handle, 0.25, { BackgroundColor3 = C.MUTED })
+    end)
+    return box
 end
 
 -- Saklar ala iOS
@@ -1008,14 +1445,10 @@ local function buildHubPage()
         BackgroundTransparency = 1, Text = "Script Hub", TextColor3 = "@TEXT",
         TextSize = 24, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
     }, HubPage)
-    local Search = textbox(HubPage, {
-        Size = UDim2.new(1, -24, 0, 32), Position = UDim2.new(0, 12, 0, 34),
-        PlaceholderText = "Search", TextXAlignment = Enum.TextXAlignment.Left,
-    })
-    make("UIPadding", { PaddingLeft = UDim.new(0, 14) }, Search)
+    local Search = spotlight(HubPage, { Position = UDim2.new(0, 12, 0, 34) }, "Spotlight Search")
 
     local Cards = make("ScrollingFrame", {
-        Size = UDim2.new(1, -24, 1, -80), Position = UDim2.new(0, 12, 0, 74),
+        Size = UDim2.new(1, -24, 1, -86), Position = UDim2.new(0, 12, 0, 80),
         BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
         ScrollBarImageColor3 = "@ACCENT", CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -1145,492 +1578,608 @@ end
 buildHubPage()
 
 ------------------------------------------------------------------------
--- SERVERS PAGE
+-- SERVERS PAGE (iOS grouped list)
 ------------------------------------------------------------------------
 local function buildServersPage()
-pageTitle(ServersPage, "Server Browser")
+    -- Judul besar + tombol refresh bulat --------------------------------------
+    make("TextLabel", {
+        Size = UDim2.new(1, -60, 0, 30), Position = UDim2.new(0, 14, 0, 0),
+        BackgroundTransparency = 1, Text = "Servers", TextColor3 = "@TEXT",
+        TextSize = 24, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+    }, ServersPage)
+    local SrvRefresh = button(ServersPage, "↻", false, {
+        Size = UDim2.fromOffset(30, 30), AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -12, 0, 0), TextSize = 16,
+    })
 
-local SrvSearch = textbox(ServersPage, {
-    Size = UDim2.new(1, -24, 0, 32), Position = UDim2.new(0, 12, 0, 30),
-    PlaceholderText = "Search by Job ID or player count...", TextXAlignment = Enum.TextXAlignment.Left,
-})
-make("UIPadding", { PaddingLeft = UDim.new(0, 14) }, SrvSearch)
+    -- Search ala iOS (kaca + ikon + tombol clear) --------------------------------
+    local SrvSearch = spotlight(ServersPage, { Position = UDim2.new(0, 12, 0, 34) }, "Search Job ID or player count")
 
--- Segmented control ala iOS
-local Seg = make("Frame", {
-    Size = UDim2.fromOffset(230, 30), Position = UDim2.new(0, 12, 0, 70),
-    BackgroundColor3 = "@BTN", BackgroundTransparency = 0.86, BorderSizePixel = 0,
-}, ServersPage)
-corner(Seg, PILL)
-rim(Seg, 1, 45, true)
-local SegPill = make("Frame", {
-    Size = UDim2.new(0.5, -4, 1, -4), Position = UDim2.new(0, 2, 0, 2),
-    BackgroundColor3 = "@ACCENT", BackgroundTransparency = 0.05, BorderSizePixel = 0,
-}, Seg)
-corner(SegPill, PILL)
-local SortMost = make("TextButton", {
-    Size = UDim2.new(0.5, 0, 1, 0), BackgroundTransparency = 1, Text = "Most Players",
-    TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold, AutoButtonColor = false,
-}, Seg)
-local SortLeast = make("TextButton", {
-    Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.5, 0, 0, 0), BackgroundTransparency = 1,
-    Text = "Fewest Players", TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold, AutoButtonColor = false,
-}, Seg)
+    -- Segmented control penuh lebar ----------------------------------------------
+    local Seg = make("Frame", {
+        Size = UDim2.new(1, -24, 0, 30), Position = UDim2.new(0, 12, 0, 80),
+        BackgroundColor3 = "@BTN", BackgroundTransparency = 0.86, BorderSizePixel = 0,
+    }, ServersPage)
+    corner(Seg, PILL)
+    rim(Seg, 1, 45, true)
+    local SegPill = make("Frame", {
+        Size = UDim2.new(0.5, -4, 1, -4), Position = UDim2.new(0, 2, 0, 2),
+        BackgroundColor3 = "@ACCENT", BackgroundTransparency = 0.05, BorderSizePixel = 0,
+    }, Seg)
+    corner(SegPill, PILL)
+    local SortMost = make("TextButton", {
+        Size = UDim2.new(0.5, 0, 1, 0), BackgroundTransparency = 1, Text = "Most Players",
+        TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold, AutoButtonColor = false,
+    }, Seg)
+    local SortLeast = make("TextButton", {
+        Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.5, 0, 0, 0), BackgroundTransparency = 1,
+        Text = "Fewest Players", TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold, AutoButtonColor = false,
+    }, Seg)
 
-local SrvRefresh = button(ServersPage, "Refresh", false, {
-    Size = UDim2.new(0, 90, 0, 30), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 70),
-})
-local SrvStatus = make("TextLabel", {
-    Size = UDim2.new(1, -24, 0, 14), Position = UDim2.new(0, 14, 0, 108),
-    BackgroundTransparency = 1, Text = "Open this tab to load servers",
-    TextColor3 = "@MUTED", TextSize = 11, Font = F.Medium,
-    TextXAlignment = Enum.TextXAlignment.Left,
-}, ServersPage)
-local SrvList = make("Frame", {
-    Size = UDim2.new(1, -24, 0, 186), Position = UDim2.new(0, 12, 0, 124),
-    BackgroundTransparency = 1,
-}, ServersPage)
-make("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder }, SrvList)
-make("UIPadding", {
-    PaddingTop = UDim.new(0, 2), PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3),
-}, SrvList)
+    -- Daftar (inset grouped list yang bisa di-scroll) -----------------------------
+    local SrvScroll = make("ScrollingFrame", {
+        Size = UDim2.new(1, -24, 1, -120), Position = UDim2.new(0, 12, 0, 118),
+        BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
+        ScrollBarImageColor3 = "@ACCENT", CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    }, ServersPage)
+    make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, SrvScroll)
+    make("UIPadding", {
+        PaddingTop = UDim.new(0, 2), PaddingLeft = UDim.new(0, 3),
+        PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10),
+    }, SrvScroll)
 
--- Bar halaman
-local PageBar = make("Frame", {
-    Size = UDim2.new(1, -24, 0, 28), Position = UDim2.new(0, 12, 0, 312), BackgroundTransparency = 1,
-}, ServersPage)
-local PrevBtn = button(PageBar, "Prev", false, { Size = UDim2.new(0, 90, 1, 0) })
-local NextBtn = button(PageBar, "Next", true, {
-    Size = UDim2.new(0, 90, 1, 0), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0),
-})
-local PageLabel = make("TextLabel", {
-    Size = UDim2.new(1, -190, 1, 0), Position = UDim2.new(0, 95, 0, 0), BackgroundTransparency = 1,
-    Text = "Page 1 / 1", TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold,
-}, PageBar)
+    local Header = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, LayoutOrder = 1,
+    }, SrvScroll)
+    make("TextLabel", {
+        Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1, Text = "PUBLIC SERVERS", TextColor3 = "@MUTED",
+        TextSize = 11, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+    }, Header)
+    local SrvCount = make("TextLabel", {
+        Size = UDim2.new(0.5, -10, 1, 0), Position = UDim2.new(0.5, 0, 0, 0),
+        BackgroundTransparency = 1, Text = "", TextColor3 = "@MUTED",
+        TextSize = 11, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Right,
+    }, Header)
 
-local srvSort, srvData, srvBusy = "most", {}, false
+    local SrvBox = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = "@PANEL", BackgroundTransparency = 0.89, BorderSizePixel = 0,
+        ClipsDescendants = true, LayoutOrder = 2,
+    }, SrvScroll)
+    corner(SrvBox, UDim.new(0, 18))
+    rim(SrvBox, 1, 45, true)
+    make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }, SrvBox)
 
-local function styleSort()
-    tw(SegPill, 0.3, {
-        Position = (srvSort == "most") and UDim2.new(0, 2, 0, 2) or UDim2.new(0.5, 2, 0, 2),
-    }, Enum.EasingStyle.Back)
-end
+    local SrvStatus = make("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1, Text = "Open this tab to load servers",
+        TextColor3 = "@MUTED", TextSize = 11, Font = F.Medium,
+        TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, LayoutOrder = 3,
+    }, SrvScroll)
+    make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingTop = UDim.new(0, 2) }, SrvStatus)
 
--- Mengembalikan: body, atau nil + alasan + status code + retry-after (detik)
-local function httpGet(url)
-    local reason, status, retry
+    -- State ---------------------------------------------------------------------
+    local srvSort, srvData, srvBusy = "most", {}, false
+    local srvNote, srvIds, srvCursor, srvDone, srvLoadedOnce = "", {}, nil, false, false
+    local PAGE_SIZE = 10
+    local srvPage = 1
+    local lastFetch = 0
+    local FETCH_COOLDOWN = 4
+    local PAGES_FIRST, PAGES_MORE = 1, 1
+    local JOBID_PATTERN = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+    local loadPages, fetchServers, renderServers
 
-    -- 1) fungsi request executor (memberi status code & header)
-    local getters = {
-        function() return syn and syn.request end,
-        function() return http_request end,
-        function() return request end,
-        function() return fluxus and fluxus.request end,
-        function() return http and http.request end,
-    }
-    for _, getter in ipairs(getters) do
-        local okG, fn = pcall(getter)
-        if okG and type(fn) == "function" then
-            local okR, r = pcall(fn, { Url = url, Method = "GET" })
-            if okR and type(r) == "table" then
-                status = r.StatusCode
-                if type(r.Body) == "string" and #r.Body > 0 and (status == nil or status == 200) then
-                    return r.Body
+    local function styleSort()
+        tw(SegPill, 0.3, {
+            Position = (srvSort == "most") and UDim2.new(0, 2, 0, 2) or UDim2.new(0.5, 2, 0, 2),
+        }, Enum.EasingStyle.Back)
+    end
+
+    -- HTTP -----------------------------------------------------------------------
+    -- Mengembalikan: body, atau nil + alasan + status code + retry-after (detik)
+    local function httpGet(url)
+        local reason, status, retry
+
+        local getters = {
+            function() return syn and syn.request end,
+            function() return http_request end,
+            function() return request end,
+            function() return fluxus and fluxus.request end,
+            function() return http and http.request end,
+        }
+        for _, getter in ipairs(getters) do
+            local okG, fn = pcall(getter)
+            if okG and type(fn) == "function" then
+                local okR, r = pcall(fn, { Url = url, Method = "GET" })
+                if okR and type(r) == "table" then
+                    status = r.StatusCode
+                    if type(r.Body) == "string" and #r.Body > 0 and (status == nil or status == 200) then
+                        return r.Body
+                    end
+                    if status == 429 and type(r.Headers) == "table" then
+                        retry = tonumber(r.Headers["retry-after"] or r.Headers["Retry-After"])
+                    end
+                    reason = "HTTP " .. tostring(status or "?")
+                    break
+                elseif not okR then
+                    reason = tostring(r)
                 end
-                if status == 429 and type(r.Headers) == "table" then
-                    retry = tonumber(r.Headers["retry-after"] or r.Headers["Retry-After"])
-                end
-                reason = "HTTP " .. tostring(status or "?")
-                break
-            elseif not okR then
-                reason = tostring(r)
             end
         end
-    end
 
-    -- 2) game:HttpGet
-    local ok, res = pcall(function() return game:HttpGet(url) end)
-    if ok and type(res) == "string" and #res > 0 then return res end
-    if not ok then
-        reason = reason or tostring(res)
-        if tostring(res):find("429") then status = 429 end
-    end
-    return nil, reason or "respon kosong", status, retry
-end
-
--- Warna ping: rendah = hijau, sedang = kuning, tinggi = merah (transisi halus)
-local PING_GREEN, PING_YELLOW, PING_RED =
-    Color3.fromRGB(48, 209, 88), Color3.fromRGB(255, 214, 10), Color3.fromRGB(255, 69, 58)
-local function pingColor(ms)
-    if ms <= 50 then return PING_GREEN end
-    if ms <= 120 then return PING_GREEN:Lerp(PING_YELLOW, (ms - 50) / 70) end
-    if ms <= 250 then return PING_YELLOW:Lerp(PING_RED, (ms - 120) / 130) end
-    return PING_RED
-end
-local function pingHex(ms)
-    local c = pingColor(ms)
-    return ("#%02X%02X%02X"):format(
-        math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
-end
-
--- Ping (satu sumber untuk status bar dan daftar server)
-local StatsService = game:GetService("Stats")
-local function getPing()
-    local ok, v = pcall(function() return StatsService.Network.ServerStatsItem["Data Ping"]:GetValue() end)
-    if ok and type(v) == "number" and v > 0 then return v end
-    ok, v = pcall(function() return StatsService.PerformanceStats.Ping:GetValue() end)
-    if ok and type(v) == "number" and v > 0 then return v end
-    ok, v = pcall(function() return LocalPlayer:GetNetworkPing() * 2000 end)
-    if ok and type(v) == "number" and v > 0 then return v end
-end
-
--- Status bar kanan atas: ping + sinyal
-local StatusBar = make("Frame", {
-    Size = UDim2.new(0, 0, 0, 22), AutomaticSize = Enum.AutomaticSize.X,
-    AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -18, 0.5, 0),
-    BackgroundTransparency = 1,
-}, Top)
-make("UIListLayout", {
-    FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8),
-    HorizontalAlignment = Enum.HorizontalAlignment.Right,
-    VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder,
-}, StatusBar)
-
-local PingLabel = make("TextLabel", {
-    Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1,
-    Text = "-- ms", TextColor3 = C.MUTED, TextSize = 11, Font = F.Bold, LayoutOrder = 1,
-}, StatusBar)
-
-local SignalBox = make("Frame", {
-    Size = UDim2.fromOffset(20, 14), BackgroundTransparency = 1, LayoutOrder = 2,
-}, StatusBar)
-local signalBars = {}
-for i = 1, 4 do
-    local h = 3 + i * 2.75
-    signalBars[i] = make("Frame", {
-        Size = UDim2.fromOffset(3, h), Position = UDim2.new(0, (i - 1) * 5, 1, -h),
-        BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.7, BorderSizePixel = 0,
-    }, SignalBox)
-    corner(signalBars[i], UDim.new(0, 1))
-end
-
-local function updatePing()
-    local ping = getPing()
-    if not ping then
-        PingLabel.Text = "-- ms"
-        PingLabel.TextColor3 = C.MUTED
-        for _, bar in ipairs(signalBars) do
-            bar.BackgroundColor3 = Color3.new(1, 1, 1)
-            bar.BackgroundTransparency = 0.7
+        local ok, res = pcall(function() return game:HttpGet(url) end)
+        if ok and type(res) == "string" and #res > 0 then return res end
+        if not ok then
+            reason = reason or tostring(res)
+            if tostring(res):find("429") then status = 429 end
         end
-        return
+        return nil, reason or "respon kosong", status, retry
     end
-    local col = pingColor(ping)
-    PingLabel.Text = ("%d ms"):format(math.floor(ping + 0.5))
-    PingLabel.TextColor3 = col
-    local n = (ping <= 60 and 4) or (ping <= 120 and 3) or (ping <= 200 and 2) or 1
-    for i, bar in ipairs(signalBars) do
-        bar.BackgroundColor3 = (i <= n) and col or Color3.new(1, 1, 1)
-        bar.BackgroundTransparency = (i <= n) and 0 or 0.7
-    end
-end
-updatePing()
-task.spawn(function()
-    while ScreenGui.Parent do
-        updatePing()
-        task.wait(0.5)
-    end
-end)
 
-local srvNote, srvIds, srvCursor, srvHost, srvDone, srvLoadedOnce = "", {}, nil, nil, false, false
-local PAGE_SIZE = 4
-local srvPage, srvTotalPages = 1, 1
-local JOBID_PATTERN = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
-SrvStatus.TextTruncate = Enum.TextTruncate.AtEnd
-
-local function joinServer(id)
-    log("Teleporting to server " .. id:sub(1, 8) .. "...", "info")
-    local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, id, LocalPlayer)
-    end)
-    if not ok then log("Teleport gagal: " .. tostring(err), "err") end
-end
-
-local function serverCard(s, order)
-    local isCurrent = (s.id == game.JobId)
-    local card = glassCard(SrvList, 42, order)
-    if isCurrent then
-        local overlay = make("Frame", {
-            Size = UDim2.fromScale(1, 1), BackgroundColor3 = "@ACCENT",
-            BackgroundTransparency = 0.8, BorderSizePixel = 0,
-        }, card)
-        corner(overlay, UDim.new(0, 16))
+    -- Warna ping + kepadatan server ------------------------------------------------
+    local PING_GREEN, PING_YELLOW, PING_RED =
+        Color3.fromRGB(48, 209, 88), Color3.fromRGB(255, 214, 10), Color3.fromRGB(255, 69, 58)
+    local function pingColor(ms)
+        if ms <= 50 then return PING_GREEN end
+        if ms <= 120 then return PING_GREEN:Lerp(PING_YELLOW, (ms - 50) / 70) end
+        if ms <= 250 then return PING_YELLOW:Lerp(PING_RED, (ms - 120) / 130) end
+        return PING_RED
     end
-    make("TextLabel", {
-        Size = UDim2.new(0.6, 0, 0, 18), Position = UDim2.new(0, 14, 0, 5),
+    local function pingHex(ms)
+        local c = pingColor(ms)
+        return ("#%02X%02X%02X"):format(
+            math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+    end
+    local LOAD_GREEN, LOAD_ORANGE, LOAD_RED =
+        Color3.fromRGB(52, 199, 89), Color3.fromRGB(255, 159, 10), Color3.fromRGB(255, 69, 58)
+    local function loadColor(r)
+        if r < 0.6 then return LOAD_GREEN end
+        if r < 0.9 then return LOAD_ORANGE end
+        return LOAD_RED
+    end
+
+    -- Ping (satu sumber untuk status bar dan daftar server)
+    local StatsService = game:GetService("Stats")
+    local function getPing()
+        local ok, v = pcall(function() return StatsService.Network.ServerStatsItem["Data Ping"]:GetValue() end)
+        if ok and type(v) == "number" and v > 0 then return v end
+        ok, v = pcall(function() return StatsService.PerformanceStats.Ping:GetValue() end)
+        if ok and type(v) == "number" and v > 0 then return v end
+        ok, v = pcall(function() return LocalPlayer:GetNetworkPing() * 2000 end)
+        if ok and type(v) == "number" and v > 0 then return v end
+    end
+
+    -- Status bar kanan atas: ping + sinyal
+    local StatusBar = make("Frame", {
+        Size = UDim2.new(0, 0, 0, 22), AutomaticSize = Enum.AutomaticSize.X,
+        AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -18, 0.5, 0),
         BackgroundTransparency = 1,
-        Text = ("%d / %d players"):format(s.playing or 0, s.maxPlayers or 0),
-        TextColor3 = "@TEXT", TextSize = 13, Font = F.Bold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-    }, card)
-    local ping = tonumber(s.ping)
-    if isCurrent then ping = getPing() or ping end
-    local pingText = "-"
-    if ping then
-        pingText = ('<font color="%s">%d ms</font>'):format(pingHex(ping), math.floor(ping + 0.5))
+    }, Top)
+    make("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8),
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+        VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder,
+    }, StatusBar)
+    local PingLabel = make("TextLabel", {
+        Size = UDim2.new(0, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1,
+        Text = "-- ms", TextColor3 = C.MUTED, TextSize = 11, Font = F.Bold, LayoutOrder = 1,
+    }, StatusBar)
+    local SignalBox = make("Frame", {
+        Size = UDim2.fromOffset(20, 14), BackgroundTransparency = 1, LayoutOrder = 2,
+    }, StatusBar)
+    local signalBars = {}
+    for i = 1, 4 do
+        local h = 3 + i * 2.75
+        signalBars[i] = make("Frame", {
+            Size = UDim2.fromOffset(3, h), Position = UDim2.new(0, (i - 1) * 5, 1, -h),
+            BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.7, BorderSizePixel = 0,
+        }, SignalBox)
+        corner(signalBars[i], UDim.new(0, 1))
     end
-    make("TextLabel", {
-        Size = UDim2.new(0.7, 0, 0, 14), Position = UDim2.new(0, 14, 0, 23),
-        BackgroundTransparency = 1, RichText = true,
-        Text = ("Ping %s  |  %s"):format(pingText, s.id:sub(1, 8)),
-        TextColor3 = "@MUTED", TextSize = 11, Font = F.Bold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-    }, card)
-    if isCurrent then
-        make("TextLabel", {
-            Size = UDim2.new(0, 60, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, -12, 0.5, 0), BackgroundTransparency = 1,
-            Text = "Current", TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold,
-        }, card)
-    else
-        local join = button(card, "Join", true, {
-            Size = UDim2.new(0, 62, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, -12, 0.5, 0),
-        })
-        join.MouseButton1Click:Connect(function() joinServer(s.id) end)
-    end
-end
-
-local function renderServers()
-    for _, c in ipairs(SrvList:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    local rawQ = (SrvSearch.Text:gsub("%s", ""))
-    local q = rawQ:lower()
-    local matches = {}
-    for _, s in ipairs(srvData) do
-        if q == "" or (s.id:lower():find(q, 1, true) ~= nil) or (tostring(s.playing) == q) then
-            matches[#matches + 1] = s
-        end
-    end
-    srvTotalPages = math.max(1, math.ceil(#matches / PAGE_SIZE))
-    srvPage = math.clamp(srvPage, 1, srvTotalPages)
-    local first = (srvPage - 1) * PAGE_SIZE
-    for i = 1, PAGE_SIZE do
-        local sv = matches[first + i]
-        if sv then serverCard(sv, i) end
-    end
-
-    -- Job ID lengkap yang tidak ada di daftar: bisa langsung di-join
-    if #matches == 0 and rawQ:match(JOBID_PATTERN) then
-        local card = glassCard(SrvList, 42, 1)
-        make("TextLabel", {
-            Size = UDim2.new(0.6, 0, 0, 18), Position = UDim2.new(0, 14, 0, 5),
-            BackgroundTransparency = 1, Text = "Join Job ID langsung", TextColor3 = "@TEXT",
-            TextSize = 13, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
-        }, card)
-        make("TextLabel", {
-            Size = UDim2.new(0.7, 0, 0, 14), Position = UDim2.new(0, 14, 0, 23),
-            BackgroundTransparency = 1, Text = rawQ:sub(1, 8) .. "...", TextColor3 = "@MUTED",
-            TextSize = 11, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
-        }, card)
-        local join = button(card, "Join", true, {
-            Size = UDim2.new(0, 62, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, -12, 0.5, 0),
-        })
-        join.MouseButton1Click:Connect(function() joinServer(rawQ) end)
-    end
-
-    local note = srvNote
-    PageLabel.Text = ("Page %d / %d%s"):format(srvPage, srvTotalPages, srvDone and "" or "+")
-    NextBtn.Text = (srvPage >= srvTotalPages and not srvDone) and "Load more" or "Next"
-    SrvStatus.Text = ("%d shown / %d loaded%s"):format(#matches, #srvData, note ~= "" and ("  |  " .. note) or "")
-end
-
-local lastFetch = 0
-local FETCH_COOLDOWN = 4
-local PAGES_FIRST, PAGES_MORE = 1, 1
-
-local function sortServers()
-    table.sort(srvData, function(a, b)
-        if srvSort == "most" then return (a.playing or 0) > (b.playing or 0) end
-        return (a.playing or 0) < (b.playing or 0)
-    end)
-end
-
-local HOSTS = { "games.roblox.com", "games.roproxy.com" }
-
-local function waitWithStatus(sec, msg)
-    for i = math.ceil(sec), 1, -1 do
-        if not ScreenGui.Parent then return end
-        SrvStatus.Text = ("%s (%d dtk)"):format(msg, i)
-        task.wait(1)
-    end
-end
-
--- Ambil satu halaman server. Bergantian antar host, dan menunggu bertahap bila terkena rate limit.
-local function requestPage(order, cursor, startIdx)
-    local lastReason
-    for attempt = 1, 5 do
-        local waitFor = 0
-        for h = 0, 1 do
-            local host = HOSTS[((startIdx + h - 1) % 2) + 1]
-            local url = ("https://%s/v1/games/%d/servers/Public?sortOrder=%s&excludeFullGames=false&limit=100")
-                :format(host, game.PlaceId, order)
-            if cursor then url = url .. "&cursor=" .. HttpService:UrlEncode(cursor) end
-
-            local body, reason, status, retry = httpGet(url)
-            if body then
-                local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
-                if ok and type(data) == "table" and not data.errors then
-                    return data
-                end
-                reason = (ok and type(data) == "table" and data.errors and data.errors[1]
-                    and tostring(data.errors[1].message)) or "respon tidak valid (kemungkinan rate limit)"
-                waitFor = math.max(waitFor, 3 * attempt)
-            elseif status == 429 then
-                waitFor = math.max(waitFor, retry or (4 * attempt))
-            else
-                waitFor = math.max(waitFor, 2 * attempt)
+    local function updatePing()
+        local ping = getPing()
+        if not ping then
+            PingLabel.Text = "-- ms"
+            PingLabel.TextColor3 = C.MUTED
+            for _, bar in ipairs(signalBars) do
+                bar.BackgroundColor3 = Color3.new(1, 1, 1)
+                bar.BackgroundTransparency = 0.7
             end
-            lastReason = host .. ": " .. tostring(reason)
+            return
         end
-        if attempt < 5 then
-            waitWithStatus(math.min(waitFor, 15), "Rate limit, mencoba lagi")
-        end
-    end
-    return nil, lastReason
-end
-
-local function addServers(arr)
-    for _, s in ipairs(arr) do
-        if type(s) == "table" and s.id and not srvIds[s.id] then
-            srvIds[s.id] = true
-            table.insert(srvData, s)
+        local col = pingColor(ping)
+        PingLabel.Text = ("%d ms"):format(math.floor(ping + 0.5))
+        PingLabel.TextColor3 = col
+        local n = (ping <= 60 and 4) or (ping <= 120 and 3) or (ping <= 200 and 2) or 1
+        for i, bar in ipairs(signalBars) do
+            bar.BackgroundColor3 = (i <= n) and col or Color3.new(1, 1, 1)
+            bar.BackgroundTransparency = (i <= n) and 0 or 0.7
         end
     end
-end
-
--- reset = true: mulai dari awal (urutan sesuai tombol). reset = false: lanjut dari halaman terakhir.
-local function loadPages(reset, pages, advance)
-    if srvBusy then return end
-    srvBusy = true
-    lastFetch = os.clock()
-    srvNote = "loading..."
-    SrvStatus.Text = "Loading servers..."
+    updatePing()
     task.spawn(function()
-        local order = (srvSort == "most") and "Desc" or "Asc"
-        local fresh = reset
-        local loaded, lastErr = 0, nil
-        local cursor = (not reset) and srvCursor or nil
+        while ScreenGui.Parent do
+            updatePing()
+            task.wait(0.5)
+        end
+    end)
 
-        local okRun, runErr = pcall(function()
-            for page = 1, pages do
-                local data, err = requestPage(order, cursor, page)
-                if not data then lastErr = tostring(err) break end
+    local function joinServer(id)
+        log("Teleporting to server " .. id:sub(1, 8) .. "...", "info")
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, id, LocalPlayer)
+        end)
+        if not ok then log("Teleport gagal: " .. tostring(err), "err") end
+        return ok
+    end
 
-                if fresh then
-                    srvData, srvIds, srvDone, fresh = {}, {}, false, false
-                end
-                local arr = data.data or {}
-                addServers(arr)
-                loaded += #arr
-                cursor = data.nextPageCursor
-                srvCursor = cursor
-                if not cursor then srvDone = true break end
+    -- Komponen baris -----------------------------------------------------------------
+    local function rowBase(n, glyph, iconColor, useAccent)
+        local row = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 58), BackgroundTransparency = 1, LayoutOrder = n,
+        }, SrvBox)
+        make("Frame", {
+            Size = UDim2.new(1, -50, 0, 1), Position = UDim2.new(0, 50, 0, 0),
+            BackgroundColor3 = "@WHITE", BackgroundTransparency = 0.88, BorderSizePixel = 0,
+            Visible = n > 1,
+        }, row)
+        local icon = make("Frame", {
+            Size = UDim2.fromOffset(30, 30), Position = UDim2.new(0, 12, 0.5, -15),
+            BackgroundColor3 = useAccent and "@ACCENT" or Color3.new(1, 1, 1), BorderSizePixel = 0,
+        }, row)
+        corner(icon, UDim.new(0, 9))
+        if not useAccent then
+            make("UIGradient", {
+                Rotation = 90, Color = ColorSequence.new(iconColor:Lerp(Color3.new(1, 1, 1), 0.28), iconColor),
+            }, icon)
+        end
+        make("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.75, Thickness = 1,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, icon)
+        make("TextLabel", {
+            Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = glyph,
+            TextColor3 = Color3.new(1, 1, 1), TextSize = 14, Font = F.Bold,
+        }, icon)
+        return row
+    end
 
-                sortServers()
-                srvNote = ("loading... (%d/%d halaman)"):format(page, pages)
-                renderServers() -- tampilkan hasil sementara tiap halaman
-                if page < pages then task.wait(1.5) end
+    local function rowText(row, title, sub)
+        make("TextLabel", {
+            Size = UDim2.new(1, -142, 0, 18), Position = UDim2.new(0, 50, 0, 9),
+            BackgroundTransparency = 1, Text = title, TextColor3 = "@TEXT", TextSize = 13,
+            Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+        }, row)
+        make("TextLabel", {
+            Size = UDim2.new(1, -142, 0, 14), Position = UDim2.new(0, 50, 0, 27),
+            BackgroundTransparency = 1, RichText = true, Text = sub, TextColor3 = "@MUTED",
+            TextSize = 11, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+        }, row)
+    end
+
+    local function joinButton(row, id)
+        local join = button(row, "Join", true, {
+            Size = UDim2.new(0, 62, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -12, 0.5, 0),
+        })
+        join.MouseButton1Click:Connect(function()
+            join.Text = "Joining..."
+            if not joinServer(id) then join.Text = "Join" end
+        end)
+    end
+
+    local function serverRow(s, n)
+        local isCurrent = (s.id == game.JobId)
+        local playing, maxP = s.playing or 0, s.maxPlayers or 0
+        local ratio = (maxP > 0) and math.clamp(playing / maxP, 0, 1) or 0
+        local row = rowBase(n, isCurrent and "✓" or "👥", loadColor(ratio), isCurrent)
+
+        local ping = tonumber(s.ping)
+        if isCurrent then ping = getPing() or ping end
+        local pingText = "-"
+        if ping then
+            pingText = ('<font color="%s">%d ms</font>'):format(pingHex(ping), math.floor(ping + 0.5))
+        end
+        rowText(row, ("%d / %d players"):format(playing, maxP),
+            ("Ping %s  ·  %s"):format(pingText, s.id:sub(1, 8)))
+
+        -- bar kepadatan server
+        local rail = make("Frame", {
+            Size = UDim2.new(0, 120, 0, 4), Position = UDim2.new(0, 50, 0, 46),
+            BackgroundColor3 = "@BTN", BackgroundTransparency = 0.7, BorderSizePixel = 0,
+        }, row)
+        corner(rail, PILL)
+        local fill = make("Frame", {
+            Size = UDim2.new(ratio, 0, 1, 0), BackgroundColor3 = loadColor(ratio), BorderSizePixel = 0,
+        }, rail)
+        corner(fill, PILL)
+
+        if isCurrent then
+            local badge = make("TextLabel", {
+                Size = UDim2.fromOffset(66, 24), AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -12, 0.5, 0), BackgroundColor3 = "@ACCENT",
+                BackgroundTransparency = 0.7, BorderSizePixel = 0, Text = "Current",
+                TextColor3 = "@TEXT", TextSize = 11, Font = F.Bold,
+            }, row)
+            corner(badge, PILL)
+        else
+            joinButton(row, s.id)
+        end
+    end
+
+    local function jobIdRow(n, id)
+        local row = rowBase(n, "→", Color3.fromRGB(10, 132, 255), false)
+        rowText(row, "Join Job ID langsung", id:sub(1, 8) .. "...")
+        joinButton(row, id)
+    end
+
+    local function messageRow(n, text)
+        make("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 56), BackgroundTransparency = 1, Text = text,
+            TextColor3 = "@MUTED", TextSize = 12, Font = F.Medium, LayoutOrder = n,
+        }, SrvBox)
+    end
+
+    local function loadMore()
+        if srvBusy then return end
+        if not srvCursor then fetchServers(false) return end
+        local remaining = 2 - (os.clock() - lastFetch)
+        if remaining > 0 then
+            SrvStatus.Text = ("Tunggu %d detik..."):format(math.ceil(remaining))
+            return
+        end
+        loadPages(false, PAGES_MORE, true)
+    end
+
+    local function pagerRow(n, totalPages)
+        local row = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = n,
+        }, SrvBox)
+        make("Frame", {
+            Size = UDim2.new(1, -24, 0, 1), Position = UDim2.new(0, 12, 0, 0),
+            BackgroundColor3 = "@WHITE", BackgroundTransparency = 0.88, BorderSizePixel = 0,
+            Visible = n > 1,
+        }, row)
+        local canPrev = srvPage > 1
+        local atEnd = srvPage >= totalPages
+        local canNext = (not atEnd) or (not srvDone and not srvBusy)
+
+        local prev = button(row, "‹ Prev", false, {
+            Size = UDim2.new(0, 76, 0, 28), AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 12, 0.5, 0), TextTransparency = canPrev and 0 or 0.65,
+        })
+        local nxt = button(row, (atEnd and not srvDone) and "Load ›" or "Next ›", canNext, {
+            Size = UDim2.new(0, 76, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -12, 0.5, 0), TextTransparency = canNext and 0 or 0.65,
+        })
+        make("TextLabel", {
+            Size = UDim2.new(1, -176, 1, 0), Position = UDim2.new(0, 88, 0, 0),
+            BackgroundTransparency = 1, TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold,
+            Text = ("Page %d / %d%s"):format(srvPage, totalPages, srvDone and "" or "+"),
+        }, row)
+
+        prev.MouseButton1Click:Connect(function()
+            if not canPrev then return end
+            srvPage -= 1
+            SrvScroll.CanvasPosition = Vector2.zero
+            renderServers()
+        end)
+        nxt.MouseButton1Click:Connect(function()
+            if not atEnd then
+                srvPage += 1
+                SrvScroll.CanvasPosition = Vector2.zero
+                renderServers()
+            elseif canNext then
+                loadMore()
             end
         end)
-        if not okRun then lastErr = tostring(runErr) end
-        srvBusy = false
-        if loaded > 0 then srvLoadedOnce = true end
-        if advance and loaded > 0 then srvPage += 1 end
+    end
 
-        if game.JobId ~= "" and not srvIds[game.JobId] and (not fresh or #srvData == 0) then
-            srvIds[game.JobId] = true
-            table.insert(srvData, {
-                id = game.JobId, playing = #Players:GetPlayers(), maxPlayers = Players.MaxPlayers,
-            })
+    -- Render ---------------------------------------------------------------------------
+    function renderServers()
+        for _, c in ipairs(SrvBox:GetChildren()) do
+            if c:IsA("GuiObject") then c:Destroy() end
         end
+        local rawQ = (SrvSearch.Text:gsub("%s", ""))
+        local q = rawQ:lower()
+        local matches = {}
+        for _, s in ipairs(srvData) do
+            if q == "" or (s.id:lower():find(q, 1, true) ~= nil) or (tostring(s.playing) == q) then
+                matches[#matches + 1] = s
+            end
+        end
+
+        local totalPages = math.max(1, math.ceil(#matches / PAGE_SIZE))
+        srvPage = math.clamp(srvPage, 1, totalPages)
+        local first = (srvPage - 1) * PAGE_SIZE
+        local n = 0
+        for i = 1, PAGE_SIZE do
+            local sv = matches[first + i]
+            if sv then
+                n += 1
+                serverRow(sv, n)
+            end
+        end
+
+        if #matches == 0 and rawQ:match(JOBID_PATTERN) then
+            n += 1
+            jobIdRow(n, rawQ)
+        elseif #matches == 0 then
+            n += 1
+            messageRow(n, srvBusy and "Loading servers..." or "No servers found")
+        end
+
+        if #matches > 0 then
+            n += 1
+            pagerRow(n, totalPages)
+        end
+
+        SrvCount.Text = ("%d servers"):format(#matches)
+        SrvStatus.Text = ("%d loaded"):format(#srvData) .. (srvNote ~= "" and ("  ·  " .. srvNote) or "")
+        SrvRefresh.TextTransparency = srvBusy and 0.6 or 0
+    end
+
+    -- Fetch ------------------------------------------------------------------------------
+    local function sortServers()
+        table.sort(srvData, function(a, b)
+            if srvSort == "most" then return (a.playing or 0) > (b.playing or 0) end
+            return (a.playing or 0) < (b.playing or 0)
+        end)
+    end
+
+    local HOSTS = { "games.roblox.com", "games.roproxy.com" }
+
+    local function waitWithStatus(sec, msg)
+        for i = math.ceil(sec), 1, -1 do
+            if not ScreenGui.Parent then return end
+            SrvStatus.Text = ("%s (%d dtk)"):format(msg, i)
+            task.wait(1)
+        end
+    end
+
+    -- Ambil satu halaman server. Bergantian antar host, dan menunggu bertahap bila terkena rate limit.
+    local function requestPage(order, cursor, startIdx)
+        local lastReason
+        for attempt = 1, 5 do
+            local waitFor = 0
+            for h = 0, 1 do
+                local host = HOSTS[((startIdx + h - 1) % 2) + 1]
+                local url = ("https://%s/v1/games/%d/servers/Public?sortOrder=%s&excludeFullGames=false&limit=100")
+                    :format(host, game.PlaceId, order)
+                if cursor then url = url .. "&cursor=" .. HttpService:UrlEncode(cursor) end
+
+                local body, reason, status, retry = httpGet(url)
+                if body then
+                    local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+                    if ok and type(data) == "table" and not data.errors then
+                        return data
+                    end
+                    reason = (ok and type(data) == "table" and data.errors and data.errors[1]
+                        and tostring(data.errors[1].message)) or "respon tidak valid (kemungkinan rate limit)"
+                    waitFor = math.max(waitFor, 3 * attempt)
+                elseif status == 429 then
+                    waitFor = math.max(waitFor, retry or (4 * attempt))
+                else
+                    waitFor = math.max(waitFor, 2 * attempt)
+                end
+                lastReason = host .. ": " .. tostring(reason)
+            end
+            if attempt < 5 then
+                waitWithStatus(math.min(waitFor, 15), "Rate limit, mencoba lagi")
+            end
+        end
+        return nil, lastReason
+    end
+
+    local function addServers(arr)
+        for _, s in ipairs(arr) do
+            if type(s) == "table" and s.id and not srvIds[s.id] then
+                srvIds[s.id] = true
+                table.insert(srvData, s)
+            end
+        end
+    end
+
+    -- reset = true: mulai dari awal. reset = false: lanjut dari halaman terakhir.
+    function loadPages(reset, pages, advance)
+        if srvBusy then return end
+        srvBusy = true
+        lastFetch = os.clock()
+        srvNote = "loading..."
+        renderServers()
+        task.spawn(function()
+            local order = (srvSort == "most") and "Desc" or "Asc"
+            local fresh = reset
+            local loaded, lastErr = 0, nil
+            local cursor = (not reset) and srvCursor or nil
+
+            local okRun, runErr = pcall(function()
+                for page = 1, pages do
+                    local data, err = requestPage(order, cursor, page)
+                    if not data then lastErr = tostring(err) break end
+
+                    if fresh then
+                        srvData, srvIds, srvDone, fresh = {}, {}, false, false
+                    end
+                    local arr = data.data or {}
+                    addServers(arr)
+                    loaded += #arr
+                    cursor = data.nextPageCursor
+                    srvCursor = cursor
+                    if not cursor then srvDone = true break end
+
+                    sortServers()
+                    srvNote = ("loading... (%d/%d halaman)"):format(page, pages)
+                    renderServers()
+                    if page < pages then task.wait(1.5) end
+                end
+            end)
+            if not okRun then lastErr = tostring(runErr) end
+            srvBusy = false
+            if loaded > 0 then srvLoadedOnce = true end
+            if advance and loaded > 0 then srvPage += 1 end
+
+            if game.JobId ~= "" and not srvIds[game.JobId] and (not fresh or #srvData == 0) then
+                srvIds[game.JobId] = true
+                table.insert(srvData, {
+                    id = game.JobId, playing = #Players:GetPlayers(), maxPlayers = Players.MaxPlayers,
+                })
+            end
+            sortServers()
+
+            if lastErr then
+                srvNote = ((loaded > 0) and "sebagian dimuat, tekan Load more untuk lanjut: " or "gagal: ") .. lastErr
+                log("Server browser: " .. lastErr, (loaded > 0) and "warn" or "err")
+            elseif srvDone then
+                srvNote = "semua server dimuat"
+                log("Loaded " .. #srvData .. " servers (semua)", "ok")
+            else
+                srvNote = ""
+                log("Loaded " .. #srvData .. " servers", "ok")
+            end
+            renderServers()
+        end)
+    end
+
+    function fetchServers(silent)
+        if srvBusy then return end
+        local remaining = FETCH_COOLDOWN - (os.clock() - lastFetch)
+        if remaining > 0 and srvLoadedOnce then
+            if not silent then
+                SrvStatus.Text = ("Tunggu %d detik sebelum refresh lagi..."):format(math.ceil(remaining))
+            end
+            return
+        end
+        loadPages(true, PAGES_FIRST)
+    end
+
+    -- Event ----------------------------------------------------------------------------------
+    local function changeSort(mode)
+        if srvSort == mode then return end
+        srvSort = mode
+        styleSort()
+        srvPage = 1
         sortServers()
-
-        if lastErr then
-            srvNote = ((loaded > 0) and "sebagian dimuat, tekan Load more untuk lanjut: " or "gagal: ") .. lastErr
-            log("Server browser: " .. lastErr, (loaded > 0) and "warn" or "err")
-        elseif srvDone then
-            srvNote = "semua server dimuat"
-            log("Loaded " .. #srvData .. " servers (semua)", "ok")
-        else
-            srvNote = "tekan Load more untuk memuat lebih banyak"
-            log("Loaded " .. #srvData .. " servers", "ok")
-        end
+        renderServers()
+        fetchServers(true)
+    end
+    SortMost.MouseButton1Click:Connect(function() changeSort("most") end)
+    SortLeast.MouseButton1Click:Connect(function() changeSort("least") end)
+    SrvRefresh.MouseButton1Click:Connect(function()
+        tw(SrvRefresh, 0.5, { Rotation = SrvRefresh.Rotation + 360 })
+        srvPage = 1
+        fetchServers(false)
+    end)
+    SrvSearch:GetPropertyChangedSignal("Text"):Connect(function()
+        srvPage = 1
         renderServers()
     end)
-end
-
-local function fetchServers(silent)
-    if srvBusy then return end
-    local remaining = FETCH_COOLDOWN - (os.clock() - lastFetch)
-    if remaining > 0 and srvLoadedOnce then
-        if not silent then
-            SrvStatus.Text = ("Tunggu %d detik sebelum refresh lagi..."):format(math.ceil(remaining))
-        end
-        return
-    end
-    loadPages(true, PAGES_FIRST)
-end
-
--- Ganti urutan: langsung diurutkan ulang dari data yang ada, lalu muat ulang di latar belakang
-local function changeSort(mode)
-    if srvSort == mode then return end
-    srvSort = mode
-    styleSort()
-    srvPage = 1
-    sortServers()
+    tabs["Servers"].btn.MouseButton1Click:Connect(function()
+        if #srvData == 0 then fetchServers() end
+    end)
     renderServers()
-    fetchServers(true)
-end
-SortMost.MouseButton1Click:Connect(function() changeSort("most") end)
-SortLeast.MouseButton1Click:Connect(function() changeSort("least") end)
-SrvRefresh.MouseButton1Click:Connect(function() srvPage = 1 fetchServers(false) end)
-PrevBtn.MouseButton1Click:Connect(function()
-    if srvPage > 1 then
-        srvPage -= 1
-        renderServers()
-    end
-end)
-NextBtn.MouseButton1Click:Connect(function()
-    if srvBusy then return end
-    if srvPage < srvTotalPages then
-        srvPage += 1
-        renderServers()
-        return
-    end
-    -- sudah di halaman terakhir yang termuat: ambil halaman berikutnya dari Roblox
-    if srvDone then
-        srvNote = "semua server sudah dimuat"
-        renderServers()
-        return
-    end
-    if not srvCursor then fetchServers(false) return end
-    local remaining = 2 - (os.clock() - lastFetch)
-    if remaining > 0 then
-        SrvStatus.Text = ("Tunggu %d detik..."):format(math.ceil(remaining))
-        return
-    end
-    loadPages(false, PAGES_MORE, true)
-end)
-SrvSearch:GetPropertyChangedSignal("Text"):Connect(function()
-    srvPage = 1
-    renderServers()
-end)
-tabs["Servers"].btn.MouseButton1Click:Connect(function()
-    if #srvData == 0 then fetchServers() end
-end)
 end
 buildServersPage()
 
@@ -1910,12 +2459,13 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
         return
     end
     if gpe then return end
-    if input.KeyCode == toggleKey then
+    if input.KeyCode == toggleKey and not Splash.introActive then
         setVisible(not shown)
     end
 end))
 
 local function unload()
+    pcall(Splash.destroy)
     stopFly()
     setNoclip(false)
     infJumpEnabled = false
@@ -1952,7 +2502,43 @@ corner(creditLine, PILL)
 ------------------------------------------------------------------------
 if CONFIG.Blur then blurSwitch.set(true, true) end
 selectTab("Script Hub")
-setVisible(true)
+
+-- Intro ala aplikasi: ikon + logo chrome terisi kanan->kiri, kilau, lalu zoom ke jendela
+local INTRO_TIME = 3 -- durasi pengisian logo / progress (detik)
+local function playIntro()
+    Splash.started = true
+    shown = true
+    visToken += 1
+    scaleFrom = 0.4
+    snapshot()
+    animValue.Value = 0
+    applyProgress(0)
+    Main.Visible = false
+    ScreenGui.Enabled = true
+    Splash.reveal(INTRO_TIME)
+
+    task.spawn(function()
+        task.wait(INTRO_TIME)
+        Splash.sheen(0.7)
+        task.wait(0.6)
+        Splash.ripple()
+        -- anchor di tengah agar jendela tumbuh dari titik tengah layar
+        local origPos = Main.Position
+        Main.AnchorPoint = Vector2.new(0.5, 0.5)
+        Main.Position = UDim2.new(origPos.X.Scale, origPos.X.Offset + WIN_W / 2,
+            origPos.Y.Scale, origPos.Y.Offset + WIN_H / 2)
+        Main.Visible = true
+        Splash.dissolve(1.0)
+        transition(1, 1.0, Enum.EasingStyle.Exponential, function()
+            Main.AnchorPoint = Vector2.new(0, 0)
+            Main.Position = origPos
+            scaleFrom = 0.9
+            Splash.introActive = false
+        end)
+        applyBlur()
+    end)
+end
+playIntro()
 log(CONFIG.Title .. " Hub v2.0 (Liquid Glass)", "info")
 log("Injecting...", "info")
 log("Successfully attached to Roblox", "ok")
