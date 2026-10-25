@@ -652,7 +652,7 @@ local function addTab(name, order, glyph, iconColor)
     -- ikon ala app icon iOS
     local icon = make("Frame", {
         Size = UDim2.fromOffset(26, 26), Position = UDim2.new(0, 8, 0.5, -13),
-        BackgroundColor3 = iconColor, BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
     }, btn)
     corner(icon, UDim.new(0, 8))
     make("UIGradient", {
@@ -686,8 +686,8 @@ end
 
 local HubPage = addTab("Script Hub", 1, "⚡", Color3.fromRGB(255, 159, 10))
 local ServersPage = addTab("Servers", 2, "🌐", Color3.fromRGB(10, 132, 255))
-local ConsolePage = addTab("Console", 3, ">_", Color3.fromRGB(72, 72, 78))
-local SettingsPage = addTab("Settings", 4, "⚙", Color3.fromRGB(142, 142, 147))
+local ConsolePage = addTab("Console", 4, ">_", Color3.fromRGB(72, 72, 78))
+local SettingsPage = addTab("Settings", 3, "⚙", Color3.fromRGB(142, 142, 147))
 local CreditsPage = addTab("Credits", 5, "★", Color3.fromRGB(255, 55, 95))
 
 ------------------------------------------------------------------------
@@ -770,71 +770,16 @@ track(LocalPlayer.CharacterAdded:Connect(function(char)
 end))
 
 ------------------------------------------------------------------------
--- SCRIPT HUB PAGE
+-- SCRIPT HUB PAGE (gaya iOS: judul besar, grouped list, slider + ketik)
 ------------------------------------------------------------------------
-pageTitle(HubPage, "Script Hub")
-
-local Search = textbox(HubPage, {
-    Size = UDim2.new(1, -24, 0, 32), Position = UDim2.new(0, 12, 0, 30),
-    PlaceholderText = "Search scripts...", TextXAlignment = Enum.TextXAlignment.Left,
-})
-make("UIPadding", { PaddingLeft = UDim.new(0, 14) }, Search)
-
-local Cards = make("ScrollingFrame", {
-    Size = UDim2.new(1, -24, 1, -78), Position = UDim2.new(0, 12, 0, 70),
-    BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
-    ScrollBarImageColor3 = "@ACCENT", CanvasSize = UDim2.new(),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-}, HubPage)
-make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, Cards)
-make("UIPadding", {
-    PaddingTop = UDim.new(0, 2), PaddingLeft = UDim.new(0, 3),
-    PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
-}, Cards)
-
-local cardList = {}
-local function newCard(name, category, order)
-    local card = glassCard(Cards, 54, order)
-    make("TextLabel", {
-        Size = UDim2.new(0.5, 0, 0, 18), Position = UDim2.new(0, 14, 0, 9),
-        BackgroundTransparency = 1, Text = name, TextColor3 = "@TEXT", TextSize = 13,
-        Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
-    }, card)
-    make("TextLabel", {
-        Size = UDim2.new(0.5, 0, 0, 14), Position = UDim2.new(0, 14, 0, 29),
-        BackgroundTransparency = 1, Text = category, TextColor3 = "@ACCENT2", TextSize = 10,
-        Font = F.Medium, TextXAlignment = Enum.TextXAlignment.Left,
-    }, card)
-    table.insert(cardList, { name = name:lower(), frame = card })
-    return card
-end
-
-local function inputCard(name, category, placeholder, order, callback)
-    local card = newCard(name, category, order)
-    local box = textbox(card, {
-        Size = UDim2.new(0, 64, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -82, 0.5, 0), PlaceholderText = placeholder,
-        TextXAlignment = Enum.TextXAlignment.Center,
-    })
-    local set = button(card, "Set", true, {
-        Size = UDim2.new(0, 62, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -12, 0.5, 0),
-    })
-    local function run()
-        local v = tonumber(box.Text)
-        if v then callback(v) log(name .. " = " .. v, "ok") end
-    end
-    set.MouseButton1Click:Connect(run)
-    box.FocusLost:Connect(function(enter) if enter then run() end end)
-end
-
--- Keybind fitur ------------------------------------------------------------
+-- Keybind fitur
 local State = { capturing = false, lastCapture = 0 }
 local onConfigChanged = function() end
 local getUiKeyName = function() return CONFIG.ToggleKey end
 local featureSetters = {}
 local bindButtons = {}
 local capturingId = nil
+local hubResetUI = function() end
 
 local function keyDisplay(id)
     local n = CONFIG.Keybinds[id]
@@ -843,34 +788,6 @@ end
 local function refreshBind(id)
     local bb = bindButtons[id]
     if bb then bb.Text = keyDisplay(id) end
-end
-
-local function toggleCard(id, name, category, order, callback)
-    local card = newCard(name, category, order)
-
-    local sw = makeSwitch(card, 12, function(on)
-        callback(on)
-        log(name .. (on and " enabled" or " disabled"), on and "ok" or "info")
-    end)
-
-    -- Tombol Bind: klik, lalu tekan tombol keyboard. Backspace/Delete = hapus, Esc = batal.
-    local bb = button(card, keyDisplay(id), false, {
-        Size = UDim2.new(0, 66, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -66, 0.5, 0), TextSize = 11, TextColor3 = "@MUTED",
-    })
-    bindButtons[id] = bb
-    bb.MouseButton1Click:Connect(function()
-        if capturingId then
-            local prev = capturingId
-            capturingId = nil
-            refreshBind(prev)
-        end
-        capturingId = id
-        bb.Text = "Press..."
-    end)
-
-    featureSetters[id] = { set = function(v) sw.set(v) end, get = sw.get }
-    return featureSetters[id].set, card
 end
 
 track(UserInputService.InputBegan:Connect(function(input, gpe)
@@ -917,68 +834,320 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end))
 
--- Walk Speed: isi nilai dulu, aktif setelah toggle ON (atau tombol bind) ----
-local walkValue, walkOrig = 32, 16
-local walkBox
-local _, walkCard = toggleCard("WalkSpeed", "Walk Speed", "Movement  |  isi nilai, lalu toggle", 1, function(on)
-    local h = getHumanoid()
-    if on then
-        local v = walkBox and tonumber(walkBox.Text)
-        if v then walkValue = v end
-        if h then
-            walkOrig = h.WalkSpeed
-            h.WalkSpeed = walkValue
+local function makeListKit(Cards)
+    -- Grup (inset grouped list) --------------------------------------------
+    local groups, order = {}, 0
+    local function newGroup(title)
+        order += 1
+        local header = make("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = title:upper(),
+            TextColor3 = "@MUTED", TextSize = 11, Font = F.Bold,
+            TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = order,
+        }, Cards)
+        make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingTop = UDim.new(0, 4) }, header)
+        order += 1
+        local box = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = "@PANEL", BackgroundTransparency = 0.89, BorderSizePixel = 0,
+            LayoutOrder = order,
+        }, Cards)
+        corner(box, UDim.new(0, 18))
+        rim(box, 1, 45, true)
+        make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }, box)
+        local g = { header = header, box = box, rows = {} }
+        table.insert(groups, g)
+        return g
+    end
+
+    -- Baris: ikon + judul + (kontrol) ----------------------------------------
+    local function newRow(g, title, sub, glyph, color, hasSlider, plain)
+        local n = #g.rows + 1
+        local firstH = hasSlider and 44 or 52
+        local row = make("Frame", {
+            Size = UDim2.new(1, 0, 0, firstH + (hasSlider and 34 or 0)),
+            BackgroundTransparency = 1, LayoutOrder = n,
+        }, g.box)
+        local div = make("Frame", {
+            Size = UDim2.new(1, -50, 0, 1), Position = UDim2.new(0, 50, 0, 0),
+            BackgroundColor3 = "@WHITE", BackgroundTransparency = 0.88, BorderSizePixel = 0,
+            Visible = n > 1,
+        }, row)
+        local line1 = make("Frame", {
+            Size = UDim2.new(1, 0, 0, firstH), BackgroundTransparency = 1,
+        }, row)
+        local icon = make("Frame", {
+            Size = UDim2.fromOffset(28, 28), Position = UDim2.new(0, 12, 0.5, -14),
+            BackgroundColor3 = plain and color or Color3.new(1, 1, 1), BorderSizePixel = 0,
+        }, line1)
+        corner(icon, UDim.new(0, 8))
+        if not plain then
+            make("UIGradient", {
+                Rotation = 90, Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.28), color),
+            }, icon)
         end
-        desired.speed = walkValue
-    else
-        desired.speed = nil
-        if h then h.WalkSpeed = walkOrig end
+        make("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.75, Thickness = 1,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, icon)
+        make("TextLabel", {
+            Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = glyph,
+            TextColor3 = Color3.new(1, 1, 1), TextSize = 14, Font = F.Bold,
+        }, icon)
+        make("TextLabel", {
+            Size = UDim2.new(1, -196, 0, 18), Position = UDim2.new(0, 50, 0.5, -16),
+            BackgroundTransparency = 1, Text = title, TextColor3 = "@TEXT", TextSize = 13,
+            Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+        }, line1)
+        make("TextLabel", {
+            Size = UDim2.new(1, -196, 0, 13), Position = UDim2.new(0, 50, 0.5, 3),
+            BackgroundTransparency = 1, Text = sub, TextColor3 = "@MUTED", TextSize = 10,
+            Font = F.Medium, TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+        }, line1)
+        table.insert(g.rows, { name = (title .. " " .. sub):lower(), frame = row, div = div })
+        return row, line1, firstH, icon
     end
-end)
-walkBox = textbox(walkCard, {
-    Size = UDim2.new(0, 56, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-    Position = UDim2.new(1, -140, 0.5, 0), PlaceholderText = "32",
-    TextXAlignment = Enum.TextXAlignment.Center,
-})
-walkBox.FocusLost:Connect(function()
-    local v = tonumber(walkBox.Text)
-    if not v then return end
-    walkValue = v
-    if desired.speed then
-        desired.speed = v
+    return newGroup, newRow, groups
+end
+
+    -- Slider ala iOS ------------------------------------------------------------
+    local function makeSlider(parent, pos, size, min, max, default, onChange, onDisplay, onCommit)
+        local hit = make("TextButton", {
+            Size = size, Position = pos, BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
+        }, parent)
+        local rail = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 6), Position = UDim2.new(0, 0, 0.5, -3),
+            BackgroundColor3 = "@BTN", BackgroundTransparency = 0.7, BorderSizePixel = 0,
+        }, hit)
+        corner(rail, PILL)
+        local fill = make("Frame", {
+            Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = "@ACCENT", BorderSizePixel = 0,
+        }, rail)
+        corner(fill, PILL)
+        local knob = make("Frame", {
+            Size = UDim2.fromOffset(22, 22), AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0, 0, 0.5, 0), BackgroundColor3 = Color3.new(1, 1, 1),
+            BorderSizePixel = 0,
+        }, hit)
+        corner(knob, PILL)
+        make("UIStroke", { Color = Color3.new(0, 0, 0), Transparency = 0.82, Thickness = 1,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, knob)
+        local ks = make("UIScale", {}, knob)
+
+        local obj = { value = default }
+        function obj.set(v, silent, animate)
+            obj.value = v
+            local a = math.clamp((v - min) / (max - min), 0, 1)
+            local t = animate and 0.18 or 0
+            tw(fill, t, { Size = UDim2.new(a, 0, 1, 0) })
+            tw(knob, t, { Position = UDim2.new(a, 0, 0.5, 0) })
+            if onDisplay then onDisplay(v) end
+            if not silent and onChange then onChange(v) end
+        end
+
+        local dragging = false
+        local function fromX(x)
+            local w = hit.AbsoluteSize.X
+            if w <= 0 then return end
+            local a = math.clamp((x - hit.AbsolutePosition.X) / w, 0, 1)
+            obj.set(math.floor(min + (max - min) * a + 0.5))
+        end
+        hit.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                tw(ks, 0.12, { Scale = 1.2 })
+                fromX(input.Position.X)
+            end
+        end)
+        track(UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                fromX(input.Position.X)
+            end
+        end))
+        track(UserInputService.InputEnded:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                dragging = false
+                tw(ks, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
+                if onCommit then onCommit(obj.value) end
+            end
+        end))
+
+        obj.set(default, true, false)
+        return obj
+    end
+
+    -- Baris kedua: slider + kotak angka (bisa diketik, nilai di luar rentang slider tetap diterima)
+    local function addSlider(row, firstH, min, max, default, onChange, onCommit)
+        local box
+        local sl = makeSlider(row, UDim2.new(0, 50, 0, firstH + 2), UDim2.new(1, -132, 0, 24),
+            min, max, default, onChange,
+            function(v) if box then box.Text = tostring(v) end end, onCommit)
+        box = textbox(row, {
+            Size = UDim2.new(0, 56, 0, 24), AnchorPoint = Vector2.new(1, 0),
+            Position = UDim2.new(1, -12, 0, firstH + 2), Text = tostring(default),
+            TextXAlignment = Enum.TextXAlignment.Center,
+        })
+        box.FocusLost:Connect(function()
+            local v = tonumber(box.Text)
+            if v then
+                sl.set(v, false, true)
+                if onCommit then onCommit(v) end
+            else
+                box.Text = tostring(sl.value)
+            end
+        end)
+        return sl
+    end
+
+local function buildHubPage()
+    -- Judul besar + search ala iOS
+    make("TextLabel", {
+        Size = UDim2.new(1, -28, 0, 30), Position = UDim2.new(0, 14, 0, 0),
+        BackgroundTransparency = 1, Text = "Script Hub", TextColor3 = "@TEXT",
+        TextSize = 24, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+    }, HubPage)
+    local Search = textbox(HubPage, {
+        Size = UDim2.new(1, -24, 0, 32), Position = UDim2.new(0, 12, 0, 34),
+        PlaceholderText = "Search", TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    make("UIPadding", { PaddingLeft = UDim.new(0, 14) }, Search)
+
+    local Cards = make("ScrollingFrame", {
+        Size = UDim2.new(1, -24, 1, -80), Position = UDim2.new(0, 12, 0, 74),
+        BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
+        ScrollBarImageColor3 = "@ACCENT", CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    }, HubPage)
+    make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, Cards)
+    make("UIPadding", {
+        PaddingTop = UDim.new(0, 2), PaddingLeft = UDim.new(0, 3),
+        PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10),
+    }, Cards)
+
+    local newGroup, newRow, groups = makeListKit(Cards)
+
+    -- Saklar + tombol Bind
+    local function addToggle(line1, id, name, callback)
+        local sw = makeSwitch(line1, 12, function(on)
+            callback(on)
+            log(name .. (on and " enabled" or " disabled"), on and "ok" or "info")
+        end)
+        local bb = button(line1, keyDisplay(id), false, {
+            Size = UDim2.new(0, 56, 0, 26), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -66, 0.5, 0), TextSize = 11, TextColor3 = "@MUTED",
+        })
+        bindButtons[id] = bb
+        bb.MouseButton1Click:Connect(function()
+            if capturingId then
+                local prev = capturingId
+                capturingId = nil
+                refreshBind(prev)
+            end
+            capturingId = id
+            bb.Text = "Press..."
+        end)
+        featureSetters[id] = { set = function(v) sw.set(v) end, get = sw.get }
+        return sw
+    end
+
+    -- Isi halaman --------------------------------------------------------------
+    local walkValue, walkOrig = 32, 16
+    local gMove = newGroup("Movement")
+
+    local rWalk, lWalk, hWalk = newRow(gMove, "Walk Speed", "Geser atau ketik, lalu nyalakan",
+        "🏃", Color3.fromRGB(52, 199, 89), true)
+    addToggle(lWalk, "WalkSpeed", "Walk Speed", function(on)
         local h = getHumanoid()
-        if h then h.WalkSpeed = v end
-        log("Walk Speed = " .. v, "ok")
-    else
-        log("Walk Speed nilai " .. v .. " siap (aktif setelah toggle ON)", "info")
-    end
-end)
+        if on then
+            if h then
+                walkOrig = h.WalkSpeed
+                h.WalkSpeed = walkValue
+            end
+            desired.speed = walkValue
+        else
+            desired.speed = nil
+            if h then h.WalkSpeed = walkOrig end
+        end
+    end)
+    local walkSl = addSlider(rWalk, hWalk, 16, 200, 32, function(v)
+        walkValue = v
+        if desired.speed then
+            desired.speed = v
+            local h = getHumanoid()
+            if h then h.WalkSpeed = v end
+        end
+    end, function(v)
+        if desired.speed then
+            log("Walk Speed = " .. v, "ok")
+        else
+            log("Walk Speed nilai " .. v .. " siap (aktif setelah toggle ON)", "info")
+        end
+    end)
 
-inputCard("Jump Power", "Movement  |  Free", "50", 2, function(v)
-    desired.jump = v
-    local h = getHumanoid() if h then h.UseJumpPower = true h.JumpPower = v end
-end)
-inputCard("Field of View", "Camera  |  Free", "70", 3, function(v)
-    if Workspace.CurrentCamera then Workspace.CurrentCamera.FieldOfView = v end
-end)
-inputCard("Fly Speed", "Movement  |  Free", "50", 4, function(v) flySpeed = v end)
-toggleCard("Fly", "Fly", "Movement  |  WASD + Space/Ctrl", 5, function(on)
-    flyEnabled = on
-    if on then startFly() else stopFly() end
-end)
-toggleCard("InfiniteJump", "Infinite Jump", "Movement  |  Free", 6, function(on) infJumpEnabled = on end)
-toggleCard("Noclip", "Noclip", "Movement  |  Free", 7, setNoclip)
+    local rJump, _, hJump = newRow(gMove, "Jump Power", "Geser atau ketik",
+        "⬆", Color3.fromRGB(255, 159, 10), true)
+    local jumpSl = addSlider(rJump, hJump, 0, 300, 50, function(v)
+        desired.jump = v
+        local h = getHumanoid()
+        if h then h.UseJumpPower = true h.JumpPower = v end
+    end, function(v) log("Jump Power = " .. v, "ok") end)
 
-Search:GetPropertyChangedSignal("Text"):Connect(function()
-    local q = Search.Text:lower()
-    for _, c in ipairs(cardList) do
-        c.frame.Visible = (q == "" or c.name:find(q, 1, true) ~= nil)
+    local rFly, lFly, hFly = newRow(gMove, "Fly", "WASD + Space/Ctrl, geser untuk kecepatan",
+        "✈", Color3.fromRGB(10, 132, 255), true)
+    addToggle(lFly, "Fly", "Fly", function(on)
+        flyEnabled = on
+        if on then startFly() else stopFly() end
+    end)
+    addSlider(rFly, hFly, 10, 300, CONFIG.DefaultFlySpeed, function(v) flySpeed = v end,
+        function(v) log("Fly Speed = " .. v, "ok") end)
+
+    local _, lInf = newRow(gMove, "Infinite Jump", "Lompat tanpa batas",
+        "∞", Color3.fromRGB(175, 82, 222), false)
+    addToggle(lInf, "InfiniteJump", "Infinite Jump", function(on) infJumpEnabled = on end)
+
+    local _, lClip = newRow(gMove, "Noclip", "Tembus dinding",
+        "👻", Color3.fromRGB(142, 142, 147), false)
+    addToggle(lClip, "Noclip", "Noclip", setNoclip)
+
+    local gCam = newGroup("Camera")
+    local rFov, _, hFov = newRow(gCam, "Field of View", "Sudut pandang kamera",
+        "👁", Color3.fromRGB(255, 55, 95), true)
+    local fovSl = addSlider(rFov, hFov, 30, 120, 70, function(v)
+        if Workspace.CurrentCamera then Workspace.CurrentCamera.FieldOfView = v end
+    end, function(v) log("Field of View = " .. v, "ok") end)
+
+    hubResetUI = function()
+        walkValue = 32
+        walkSl.set(32, true, true)
+        jumpSl.set(50, true, true)
+        fovSl.set(70, true, true)
     end
-end)
+
+    -- Search: sembunyikan baris & grup yang tidak cocok
+    local function applyFilter()
+        local q = Search.Text:lower()
+        for _, g in ipairs(groups) do
+            local any = false
+            for _, r in ipairs(g.rows) do
+                local vis = (q == "" or r.name:find(q, 1, true) ~= nil)
+                r.frame.Visible = vis
+                r.div.Visible = vis and any
+                if vis then any = true end
+            end
+            g.header.Visible = any
+            g.box.Visible = any
+        end
+    end
+    Search:GetPropertyChangedSignal("Text"):Connect(applyFilter)
+end
+buildHubPage()
 
 ------------------------------------------------------------------------
 -- SERVERS PAGE
 ------------------------------------------------------------------------
+local function buildServersPage()
 pageTitle(ServersPage, "Server Browser")
 
 local SrvSearch = textbox(ServersPage, {
@@ -989,7 +1158,7 @@ make("UIPadding", { PaddingLeft = UDim.new(0, 14) }, SrvSearch)
 
 -- Segmented control ala iOS
 local Seg = make("Frame", {
-    Size = UDim2.fromOffset(250, 30), Position = UDim2.new(0, 12, 0, 70),
+    Size = UDim2.fromOffset(230, 30), Position = UDim2.new(0, 12, 0, 70),
     BackgroundColor3 = "@BTN", BackgroundTransparency = 0.86, BorderSizePixel = 0,
 }, ServersPage)
 corner(Seg, PILL)
@@ -1017,17 +1186,27 @@ local SrvStatus = make("TextLabel", {
     TextColor3 = "@MUTED", TextSize = 11, Font = F.Medium,
     TextXAlignment = Enum.TextXAlignment.Left,
 }, ServersPage)
-local SrvList = make("ScrollingFrame", {
-    Size = UDim2.new(1, -24, 1, -134), Position = UDim2.new(0, 12, 0, 128),
-    BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
-    ScrollBarImageColor3 = "@ACCENT", CanvasSize = UDim2.new(),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+local SrvList = make("Frame", {
+    Size = UDim2.new(1, -24, 0, 186), Position = UDim2.new(0, 12, 0, 124),
+    BackgroundTransparency = 1,
 }, ServersPage)
-make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, SrvList)
+make("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder }, SrvList)
 make("UIPadding", {
-    PaddingTop = UDim.new(0, 2), PaddingLeft = UDim.new(0, 3),
-    PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
+    PaddingTop = UDim.new(0, 2), PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3),
 }, SrvList)
+
+-- Bar halaman
+local PageBar = make("Frame", {
+    Size = UDim2.new(1, -24, 0, 28), Position = UDim2.new(0, 12, 0, 312), BackgroundTransparency = 1,
+}, ServersPage)
+local PrevBtn = button(PageBar, "Prev", false, { Size = UDim2.new(0, 90, 1, 0) })
+local NextBtn = button(PageBar, "Next", true, {
+    Size = UDim2.new(0, 90, 1, 0), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0),
+})
+local PageLabel = make("TextLabel", {
+    Size = UDim2.new(1, -190, 1, 0), Position = UDim2.new(0, 95, 0, 0), BackgroundTransparency = 1,
+    Text = "Page 1 / 1", TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold,
+}, PageBar)
 
 local srvSort, srvData, srvBusy = "most", {}, false
 
@@ -1037,12 +1216,11 @@ local function styleSort()
     }, Enum.EasingStyle.Back)
 end
 
--- Mengembalikan: body (string) atau nil + alasan error
+-- Mengembalikan: body, atau nil + alasan + status code + retry-after (detik)
 local function httpGet(url)
-    local ok, res = pcall(function() return game:HttpGet(url) end)
-    if ok and type(res) == "string" and #res > 0 then return res end
-    local reason = ok and "respon kosong" or tostring(res)
+    local reason, status, retry
 
+    -- 1) fungsi request executor (memberi status code & header)
     local getters = {
         function() return syn and syn.request end,
         function() return http_request end,
@@ -1055,14 +1233,29 @@ local function httpGet(url)
         if okG and type(fn) == "function" then
             local okR, r = pcall(fn, { Url = url, Method = "GET" })
             if okR and type(r) == "table" then
-                if type(r.Body) == "string" and #r.Body > 0 then return r.Body end
-                reason = "HTTP " .. tostring(r.StatusCode or "?")
+                status = r.StatusCode
+                if type(r.Body) == "string" and #r.Body > 0 and (status == nil or status == 200) then
+                    return r.Body
+                end
+                if status == 429 and type(r.Headers) == "table" then
+                    retry = tonumber(r.Headers["retry-after"] or r.Headers["Retry-After"])
+                end
+                reason = "HTTP " .. tostring(status or "?")
+                break
             elseif not okR then
                 reason = tostring(r)
             end
         end
     end
-    return nil, reason
+
+    -- 2) game:HttpGet
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    if ok and type(res) == "string" and #res > 0 then return res end
+    if not ok then
+        reason = reason or tostring(res)
+        if tostring(res):find("429") then status = 429 end
+    end
+    return nil, reason or "respon kosong", status, retry
 end
 
 -- Warna ping: rendah = hijau, sedang = kuning, tinggi = merah (transisi halus)
@@ -1149,73 +1342,114 @@ task.spawn(function()
     end
 end)
 
+local srvNote, srvIds, srvCursor, srvHost, srvDone, srvLoadedOnce = "", {}, nil, nil, false, false
+local PAGE_SIZE = 4
+local srvPage, srvTotalPages = 1, 1
+local JOBID_PATTERN = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+SrvStatus.TextTruncate = Enum.TextTruncate.AtEnd
+
+local function joinServer(id)
+    log("Teleporting to server " .. id:sub(1, 8) .. "...", "info")
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, id, LocalPlayer)
+    end)
+    if not ok then log("Teleport gagal: " .. tostring(err), "err") end
+end
+
+local function serverCard(s, order)
+    local isCurrent = (s.id == game.JobId)
+    local card = glassCard(SrvList, 42, order)
+    if isCurrent then
+        local overlay = make("Frame", {
+            Size = UDim2.fromScale(1, 1), BackgroundColor3 = "@ACCENT",
+            BackgroundTransparency = 0.8, BorderSizePixel = 0,
+        }, card)
+        corner(overlay, UDim.new(0, 16))
+    end
+    make("TextLabel", {
+        Size = UDim2.new(0.6, 0, 0, 18), Position = UDim2.new(0, 14, 0, 5),
+        BackgroundTransparency = 1,
+        Text = ("%d / %d players"):format(s.playing or 0, s.maxPlayers or 0),
+        TextColor3 = "@TEXT", TextSize = 13, Font = F.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, card)
+    local ping = tonumber(s.ping)
+    if isCurrent then ping = getPing() or ping end
+    local pingText = "-"
+    if ping then
+        pingText = ('<font color="%s">%d ms</font>'):format(pingHex(ping), math.floor(ping + 0.5))
+    end
+    make("TextLabel", {
+        Size = UDim2.new(0.7, 0, 0, 14), Position = UDim2.new(0, 14, 0, 23),
+        BackgroundTransparency = 1, RichText = true,
+        Text = ("Ping %s  |  %s"):format(pingText, s.id:sub(1, 8)),
+        TextColor3 = "@MUTED", TextSize = 11, Font = F.Bold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, card)
+    if isCurrent then
+        make("TextLabel", {
+            Size = UDim2.new(0, 60, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -12, 0.5, 0), BackgroundTransparency = 1,
+            Text = "Current", TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold,
+        }, card)
+    else
+        local join = button(card, "Join", true, {
+            Size = UDim2.new(0, 62, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -12, 0.5, 0),
+        })
+        join.MouseButton1Click:Connect(function() joinServer(s.id) end)
+    end
+end
+
 local function renderServers()
     for _, c in ipairs(SrvList:GetChildren()) do
         if c:IsA("Frame") then c:Destroy() end
     end
-    local q = SrvSearch.Text:lower()
-    local shownCount = 0
+    local rawQ = (SrvSearch.Text:gsub("%s", ""))
+    local q = rawQ:lower()
+    local matches = {}
     for _, s in ipairs(srvData) do
-        local match = (q == "")
-            or (s.id:lower():find(q, 1, true) ~= nil)
-            or (tostring(s.playing) == q)
-        if match then
-            shownCount += 1
-            local isCurrent = (s.id == game.JobId)
-            local card = glassCard(SrvList, 54, shownCount)
-            if isCurrent then
-                local overlay = make("Frame", {
-                    Size = UDim2.fromScale(1, 1), BackgroundColor3 = "@ACCENT",
-                    BackgroundTransparency = 0.8, BorderSizePixel = 0,
-                }, card)
-                corner(overlay, UDim.new(0, 16))
-            end
-            make("TextLabel", {
-                Size = UDim2.new(0.6, 0, 0, 18), Position = UDim2.new(0, 14, 0, 9),
-                BackgroundTransparency = 1,
-                Text = ("%d / %d players"):format(s.playing or 0, s.maxPlayers or 0),
-                TextColor3 = "@TEXT", TextSize = 13, Font = F.Bold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-            }, card)
-            local ping = tonumber(s.ping)
-            if isCurrent then ping = getPing() or ping end
-            local pingText = "-"
-            if ping then
-                pingText = ('<font color="%s">%d ms</font>'):format(pingHex(ping), math.floor(ping + 0.5))
-            end
-            make("TextLabel", {
-                Size = UDim2.new(0.7, 0, 0, 14), Position = UDim2.new(0, 14, 0, 29),
-                BackgroundTransparency = 1, RichText = true,
-                Text = ("Ping %s  |  %s"):format(pingText, s.id:sub(1, 8)),
-                TextColor3 = "@MUTED", TextSize = 11, Font = F.Bold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-            }, card)
-            if isCurrent then
-                make("TextLabel", {
-                    Size = UDim2.new(0, 60, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-                    Position = UDim2.new(1, -12, 0.5, 0), BackgroundTransparency = 1,
-                    Text = "Current", TextColor3 = "@TEXT", TextSize = 12, Font = F.Bold,
-                }, card)
-            else
-                local join = button(card, "Join", true, {
-                    Size = UDim2.new(0, 62, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-                    Position = UDim2.new(1, -12, 0.5, 0),
-                })
-                join.MouseButton1Click:Connect(function()
-                    log("Teleporting to server " .. s.id:sub(1, 8) .. "...", "info")
-                    local ok, err = pcall(function()
-                        TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LocalPlayer)
-                    end)
-                    if not ok then log("Teleport gagal: " .. tostring(err), "err") end
-                end)
-            end
+        if q == "" or (s.id:lower():find(q, 1, true) ~= nil) or (tostring(s.playing) == q) then
+            matches[#matches + 1] = s
         end
     end
-    SrvStatus.Text = ("%d shown / %d loaded"):format(shownCount, #srvData)
+    srvTotalPages = math.max(1, math.ceil(#matches / PAGE_SIZE))
+    srvPage = math.clamp(srvPage, 1, srvTotalPages)
+    local first = (srvPage - 1) * PAGE_SIZE
+    for i = 1, PAGE_SIZE do
+        local sv = matches[first + i]
+        if sv then serverCard(sv, i) end
+    end
+
+    -- Job ID lengkap yang tidak ada di daftar: bisa langsung di-join
+    if #matches == 0 and rawQ:match(JOBID_PATTERN) then
+        local card = glassCard(SrvList, 42, 1)
+        make("TextLabel", {
+            Size = UDim2.new(0.6, 0, 0, 18), Position = UDim2.new(0, 14, 0, 5),
+            BackgroundTransparency = 1, Text = "Join Job ID langsung", TextColor3 = "@TEXT",
+            TextSize = 13, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+        }, card)
+        make("TextLabel", {
+            Size = UDim2.new(0.7, 0, 0, 14), Position = UDim2.new(0, 14, 0, 23),
+            BackgroundTransparency = 1, Text = rawQ:sub(1, 8) .. "...", TextColor3 = "@MUTED",
+            TextSize = 11, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+        }, card)
+        local join = button(card, "Join", true, {
+            Size = UDim2.new(0, 62, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -12, 0.5, 0),
+        })
+        join.MouseButton1Click:Connect(function() joinServer(rawQ) end)
+    end
+
+    local note = srvNote
+    PageLabel.Text = ("Page %d / %d%s"):format(srvPage, srvTotalPages, srvDone and "" or "+")
+    NextBtn.Text = (srvPage >= srvTotalPages and not srvDone) and "Load more" or "Next"
+    SrvStatus.Text = ("%d shown / %d loaded%s"):format(#matches, #srvData, note ~= "" and ("  |  " .. note) or "")
 end
 
-local lastFetch, srvHasReal = 0, false
+local lastFetch = 0
 local FETCH_COOLDOWN = 4
+local PAGES_FIRST, PAGES_MORE = 1, 1
 
 local function sortServers()
     table.sort(srvData, function(a, b)
@@ -1224,124 +1458,181 @@ local function sortServers()
     end)
 end
 
--- Ambil JSON dengan 1x percobaan ulang (menangani rate limit / respon kosong)
-local function requestJson(url)
+local HOSTS = { "games.roblox.com", "games.roproxy.com" }
+
+local function waitWithStatus(sec, msg)
+    for i = math.ceil(sec), 1, -1 do
+        if not ScreenGui.Parent then return end
+        SrvStatus.Text = ("%s (%d dtk)"):format(msg, i)
+        task.wait(1)
+    end
+end
+
+-- Ambil satu halaman server. Bergantian antar host, dan menunggu bertahap bila terkena rate limit.
+local function requestPage(order, cursor, startIdx)
     local lastReason
-    for attempt = 1, 2 do
-        local body, err = httpGet(url)
-        if body then
-            local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
-            if ok and type(data) == "table" then
-                if data.errors then
-                    lastReason = tostring(data.errors[1] and data.errors[1].message or "error")
-                else
+    for attempt = 1, 5 do
+        local waitFor = 0
+        for h = 0, 1 do
+            local host = HOSTS[((startIdx + h - 1) % 2) + 1]
+            local url = ("https://%s/v1/games/%d/servers/Public?sortOrder=%s&excludeFullGames=false&limit=100")
+                :format(host, game.PlaceId, order)
+            if cursor then url = url .. "&cursor=" .. HttpService:UrlEncode(cursor) end
+
+            local body, reason, status, retry = httpGet(url)
+            if body then
+                local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+                if ok and type(data) == "table" and not data.errors then
                     return data
                 end
+                reason = (ok and type(data) == "table" and data.errors and data.errors[1]
+                    and tostring(data.errors[1].message)) or "respon tidak valid (kemungkinan rate limit)"
+                waitFor = math.max(waitFor, 3 * attempt)
+            elseif status == 429 then
+                waitFor = math.max(waitFor, retry or (4 * attempt))
             else
-                lastReason = "respon tidak valid (kemungkinan terkena rate limit)"
+                waitFor = math.max(waitFor, 2 * attempt)
             end
-        else
-            lastReason = tostring(err)
+            lastReason = host .. ": " .. tostring(reason)
         end
-        if attempt == 1 then task.wait(1.5) end
+        if attempt < 5 then
+            waitWithStatus(math.min(waitFor, 15), "Rate limit, mencoba lagi")
+        end
     end
     return nil, lastReason
+end
+
+local function addServers(arr)
+    for _, s in ipairs(arr) do
+        if type(s) == "table" and s.id and not srvIds[s.id] then
+            srvIds[s.id] = true
+            table.insert(srvData, s)
+        end
+    end
+end
+
+-- reset = true: mulai dari awal (urutan sesuai tombol). reset = false: lanjut dari halaman terakhir.
+local function loadPages(reset, pages, advance)
+    if srvBusy then return end
+    srvBusy = true
+    lastFetch = os.clock()
+    srvNote = "loading..."
+    SrvStatus.Text = "Loading servers..."
+    task.spawn(function()
+        local order = (srvSort == "most") and "Desc" or "Asc"
+        local fresh = reset
+        local loaded, lastErr = 0, nil
+        local cursor = (not reset) and srvCursor or nil
+
+        local okRun, runErr = pcall(function()
+            for page = 1, pages do
+                local data, err = requestPage(order, cursor, page)
+                if not data then lastErr = tostring(err) break end
+
+                if fresh then
+                    srvData, srvIds, srvDone, fresh = {}, {}, false, false
+                end
+                local arr = data.data or {}
+                addServers(arr)
+                loaded += #arr
+                cursor = data.nextPageCursor
+                srvCursor = cursor
+                if not cursor then srvDone = true break end
+
+                sortServers()
+                srvNote = ("loading... (%d/%d halaman)"):format(page, pages)
+                renderServers() -- tampilkan hasil sementara tiap halaman
+                if page < pages then task.wait(1.5) end
+            end
+        end)
+        if not okRun then lastErr = tostring(runErr) end
+        srvBusy = false
+        if loaded > 0 then srvLoadedOnce = true end
+        if advance and loaded > 0 then srvPage += 1 end
+
+        if game.JobId ~= "" and not srvIds[game.JobId] and (not fresh or #srvData == 0) then
+            srvIds[game.JobId] = true
+            table.insert(srvData, {
+                id = game.JobId, playing = #Players:GetPlayers(), maxPlayers = Players.MaxPlayers,
+            })
+        end
+        sortServers()
+
+        if lastErr then
+            srvNote = ((loaded > 0) and "sebagian dimuat, tekan Load more untuk lanjut: " or "gagal: ") .. lastErr
+            log("Server browser: " .. lastErr, (loaded > 0) and "warn" or "err")
+        elseif srvDone then
+            srvNote = "semua server dimuat"
+            log("Loaded " .. #srvData .. " servers (semua)", "ok")
+        else
+            srvNote = "tekan Load more untuk memuat lebih banyak"
+            log("Loaded " .. #srvData .. " servers", "ok")
+        end
+        renderServers()
+    end)
 end
 
 local function fetchServers(silent)
     if srvBusy then return end
     local remaining = FETCH_COOLDOWN - (os.clock() - lastFetch)
-    if remaining > 0 and srvHasReal then
+    if remaining > 0 and srvLoadedOnce then
         if not silent then
             SrvStatus.Text = ("Tunggu %d detik sebelum refresh lagi..."):format(math.ceil(remaining))
         end
         return
     end
-    srvBusy = true
-    lastFetch = os.clock()
-    SrvStatus.Text = "Loading servers..."
-    task.spawn(function()
-        local list, lastErr = {}, nil
-
-        local okRun, runErr = pcall(function()
-            local order = (srvSort == "most") and "Desc" or "Asc"
-            local hosts = { "games.roblox.com", "games.roproxy.com" }
-
-            for _, host in ipairs(hosts) do
-                list, lastErr = {}, nil
-                local cursor = nil
-                for _ = 1, 3 do
-                    local url = ("https://%s/v1/games/%d/servers/Public?sortOrder=%s&excludeFullGames=false&limit=100")
-                        :format(host, game.PlaceId, order)
-                    if cursor then url = url .. "&cursor=" .. HttpService:UrlEncode(cursor) end
-
-                    local data, err = requestJson(url)
-                    if not data then lastErr = host .. ": " .. tostring(err) break end
-
-                    for _, s in ipairs(data.data or {}) do table.insert(list, s) end
-                    cursor = data.nextPageCursor
-                    if not cursor then break end
-                    task.wait(0.6)
-                end
-                if #list > 0 then lastErr = nil break end
-            end
-        end)
-        if not okRun then lastErr = tostring(runErr) end
-        srvBusy = false
-
-        -- Gagal: pertahankan daftar sebelumnya, jangan dikosongkan
-        if #list == 0 and srvHasReal then
-            SrvStatus.Text = ("%d loaded (data lama) - gagal refresh: %s"):format(#srvData, tostring(lastErr))
-            log("Server browser: " .. tostring(lastErr), "warn")
-            return
-        end
-
-        if #list > 0 then srvHasReal = true end
-
-        if game.JobId ~= "" then
-            local found = false
-            for _, s in ipairs(list) do
-                if s.id == game.JobId then found = true break end
-            end
-            if not found then
-                table.insert(list, {
-                    id = game.JobId,
-                    playing = #Players:GetPlayers(),
-                    maxPlayers = Players.MaxPlayers,
-                })
-            end
-        end
-
-        srvData = list
-        sortServers()
-        renderServers()
-
-        if lastErr then
-            SrvStatus.Text = "Gagal memuat server: " .. lastErr
-            log("Server browser: " .. lastErr, "err")
-        else
-            log("Loaded " .. #list .. " servers", "ok")
-        end
-    end)
+    loadPages(true, PAGES_FIRST)
 end
 
--- Ganti urutan: langsung diurutkan ulang dari data yang ada (tanpa menunggu internet),
--- lalu refresh di latar belakang kalau cooldown sudah lewat.
+-- Ganti urutan: langsung diurutkan ulang dari data yang ada, lalu muat ulang di latar belakang
 local function changeSort(mode)
     if srvSort == mode then return end
     srvSort = mode
     styleSort()
+    srvPage = 1
     sortServers()
     renderServers()
     fetchServers(true)
 end
 SortMost.MouseButton1Click:Connect(function() changeSort("most") end)
 SortLeast.MouseButton1Click:Connect(function() changeSort("least") end)
-SrvRefresh.MouseButton1Click:Connect(function() fetchServers(false) end)
-SrvSearch:GetPropertyChangedSignal("Text"):Connect(renderServers)
+SrvRefresh.MouseButton1Click:Connect(function() srvPage = 1 fetchServers(false) end)
+PrevBtn.MouseButton1Click:Connect(function()
+    if srvPage > 1 then
+        srvPage -= 1
+        renderServers()
+    end
+end)
+NextBtn.MouseButton1Click:Connect(function()
+    if srvBusy then return end
+    if srvPage < srvTotalPages then
+        srvPage += 1
+        renderServers()
+        return
+    end
+    -- sudah di halaman terakhir yang termuat: ambil halaman berikutnya dari Roblox
+    if srvDone then
+        srvNote = "semua server sudah dimuat"
+        renderServers()
+        return
+    end
+    if not srvCursor then fetchServers(false) return end
+    local remaining = 2 - (os.clock() - lastFetch)
+    if remaining > 0 then
+        SrvStatus.Text = ("Tunggu %d detik..."):format(math.ceil(remaining))
+        return
+    end
+    loadPages(false, PAGES_MORE, true)
+end)
+SrvSearch:GetPropertyChangedSignal("Text"):Connect(function()
+    srvPage = 1
+    renderServers()
+end)
 tabs["Servers"].btn.MouseButton1Click:Connect(function()
     if #srvData == 0 then fetchServers() end
 end)
+end
+buildServersPage()
 
 ------------------------------------------------------------------------
 -- CONSOLE PAGE
@@ -1356,32 +1647,8 @@ newConsole(ConsolePage, { Size = UDim2.new(1, -24, 1, -50), Position = UDim2.new
 ------------------------------------------------------------------------
 -- SETTINGS PAGE
 ------------------------------------------------------------------------
-local SettingsScroll = make("ScrollingFrame", {
-    Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0,
-    ScrollBarThickness = 3, ScrollBarImageColor3 = "@ACCENT",
-    CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
-}, SettingsPage)
-make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, SettingsScroll)
-make("UIPadding", {
-    PaddingTop = UDim.new(0, 6), PaddingLeft = UDim.new(0, 14),
-    PaddingRight = UDim.new(0, 18), PaddingBottom = UDim.new(0, 12),
-}, SettingsScroll)
-
-local function sTitle(text, order)
-    return make("TextLabel", {
-        Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, Text = text,
-        TextColor3 = "@TEXT", TextSize = 16, Font = F.Bold,
-        TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = order,
-    }, SettingsScroll)
-end
-local function sCard(height, order) return glassCard(SettingsScroll, height, order) end
-local function sLabel(parent, text, widthOffset)
-    return make("TextLabel", {
-        Size = UDim2.new(1, -(widthOffset or 120), 1, 0), Position = UDim2.new(0, 14, 0, 0),
-        BackgroundTransparency = 1, Text = text, TextColor3 = "@TEXT", TextSize = 12,
-        Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
-    }, parent)
-end
+local keyBtn, blurSwitch, unloadBtn
+local binding = false
 
 local okKey, savedKey = pcall(function() return Enum.KeyCode[CONFIG.ToggleKey] end)
 local toggleKey = (okKey and savedKey) or Enum.KeyCode.RightShift
@@ -1470,161 +1737,166 @@ local function setThemeColors(newColors)
     scheduleSave()
 end
 
--- Umum ----------------------------------------------------------------------
-sTitle("Settings", 1)
+local function buildSettingsPage()
+    make("TextLabel", {
+        Size = UDim2.new(1, -28, 0, 30), Position = UDim2.new(0, 14, 0, 0),
+        BackgroundTransparency = 1, Text = "Settings", TextColor3 = "@TEXT",
+        TextSize = 24, Font = F.Bold, TextXAlignment = Enum.TextXAlignment.Left,
+    }, SettingsPage)
+    local Scroll = make("ScrollingFrame", {
+        Size = UDim2.new(1, -24, 1, -42), Position = UDim2.new(0, 12, 0, 36),
+        BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
+        ScrollBarImageColor3 = "@ACCENT", CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    }, SettingsPage)
+    make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, Scroll)
+    make("UIPadding", {
+        PaddingTop = UDim.new(0, 2), PaddingLeft = UDim.new(0, 3),
+        PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10),
+    }, Scroll)
+    local newGroup, newRow = makeListKit(Scroll)
 
-local keyCard = sCard(48, 2)
-sLabel(keyCard, "Toggle UI key")
-local keyBtn = button(keyCard, toggleKey.Name, false, {
-    Size = UDim2.new(0, 110, 0, 28), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
-})
-local binding = false
-keyBtn.MouseButton1Click:Connect(function()
-    binding = true
-    State.capturing = true
-    keyBtn.Text = "Press a key..."
-end)
-
-local glassCardRow = sCard(48, 3)
-sLabel(glassCardRow, "Transparansi kaca (0 - 0.95)", 120)
-local glassBox = textbox(glassCardRow, {
-    Size = UDim2.new(0, 64, 0, 28), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
-    Text = tostring(CONFIG.GlassTransparency), TextXAlignment = Enum.TextXAlignment.Center,
-})
-glassBox.FocusLost:Connect(function()
-    local v = tonumber(glassBox.Text)
-    if v then
-        CONFIG.GlassTransparency = math.clamp(v, 0, 0.95)
-        tw(Main, 0.25, { BackgroundTransparency = CONFIG.GlassTransparency })
-        scheduleSave()
+    local function actionButton(parent, text, accent, rightOffset, width, props)
+        return button(parent, text, accent, merge({
+            Size = UDim2.new(0, width or 80, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -(rightOffset or 12), 0.5, 0),
+        }, props))
     end
-    glassBox.Text = tostring(CONFIG.GlassTransparency)
-end)
 
-local blurCard = sCard(48, 4)
-sLabel(blurCard, "Blur latar game saat UI terbuka")
-local blurSwitch = makeSwitch(blurCard, 12, function(on)
-    CONFIG.Blur = on
-    applyBlur()
-    scheduleSave()
-end)
+    -- General ---------------------------------------------------------------
+    local gGen = newGroup("General")
 
-local resetBtn = button(SettingsScroll, "Reset Humanoid & FOV", false, {
-    Size = UDim2.new(1, 0, 0, 36), LayoutOrder = 5,
-})
-resetBtn.MouseButton1Click:Connect(function()
-    local walkF = featureSetters.WalkSpeed
-    if walkF and walkF.get() then walkF.set(false) end
-    desired.speed, desired.jump = nil, nil
-    local h = getHumanoid()
-    if h then h.WalkSpeed = 16 h.UseJumpPower = true h.JumpPower = 50 end
-    if Workspace.CurrentCamera then Workspace.CurrentCamera.FieldOfView = 70 end
-    log("Values reset to default", "ok")
-end)
-
--- Tema warna ----------------------------------------------------------------
-sTitle("Theme", 6)
-
-local PRESETS = {
-    { "Blue",   { 10, 132, 255 }, { 64, 156, 255 } },
-    { "Teal",   { 64, 200, 224 }, { 120, 220, 238 } },
-    { "Green",  { 48, 209, 88 },  { 100, 225, 130 } },
-    { "Orange", { 255, 159, 10 }, { 255, 190, 70 } },
-    { "Red",    { 255, 69, 58 },  { 255, 120, 110 } },
-    { "Pink",   { 255, 55, 95 },  { 255, 110, 140 } },
-    { "Purple", { 191, 90, 242 }, { 208, 140, 248 } },
-}
-
-local presetCard = sCard(72, 7)
-make("TextLabel", {
-    Size = UDim2.new(1, -28, 0, 14), Position = UDim2.new(0, 14, 0, 9), BackgroundTransparency = 1,
-    Text = "Preset warna highlight (klik untuk langsung diterapkan)", TextColor3 = "@MUTED",
-    TextSize = 11, Font = F.Medium, TextXAlignment = Enum.TextXAlignment.Left,
-}, presetCard)
-local presetHolder = make("Frame", {
-    Size = UDim2.new(1, -28, 0, 30), Position = UDim2.new(0, 14, 0, 32), BackgroundTransparency = 1,
-}, presetCard)
-make("UIListLayout", {
-    FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, presetHolder)
-for i, p in ipairs(PRESETS) do
-    local pb = make("TextButton", {
-        Size = UDim2.fromOffset(28, 28), BackgroundColor3 = rgb(p[2]), BorderSizePixel = 0,
-        Text = "", AutoButtonColor = false, LayoutOrder = i,
-    }, presetHolder)
-    corner(pb, PILL)
-    make("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.55, Thickness = 1.5,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, pb)
-    local sc = make("UIScale", {}, pb)
-    pb.MouseEnter:Connect(function() tw(sc, 0.15, { Scale = 1.12 }) end)
-    pb.MouseLeave:Connect(function() tw(sc, 0.2, { Scale = 1 }) end)
-    pb.MouseButton1Click:Connect(function()
-        setThemeColors({ Accent = p[2], AccentHover = p[3] })
+    local _, lKey = newRow(gGen, "Toggle UI key", "Tombol buka / tutup UI",
+        "⌨", Color3.fromRGB(10, 132, 255), false)
+    keyBtn = actionButton(lKey, toggleKey.Name, false, 12, 110)
+    keyBtn.MouseButton1Click:Connect(function()
+        binding = true
+        State.capturing = true
+        keyBtn.Text = "Press a key..."
     end)
-end
 
-local ROW_DEFS = {
-    { "Accent",      "Highlight utama (tombol, tab aktif)" },
-    { "AccentHover", "Highlight saat disentuh mouse" },
-    { "Background",  "Tint kaca jendela" },
-    { "Panel",       "Kaca sidebar / kartu" },
-    { "Button",      "Kaca tombol" },
-    { "Text",        "Teks utama" },
-    { "TextDim",     "Teks redup" },
-}
-for i, def in ipairs(ROW_DEFS) do
-    local key = def[1]
-    local row = sCard(44, 7 + i)
-    sLabel(row, def[2], 150)
-    local swatch = make("Frame", {
-        Size = UDim2.new(0, 22, 0, 22), AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -112, 0.5, 0), BackgroundColor3 = rgb(CONFIG.Colors[key]),
-        BorderSizePixel = 0,
-    }, row)
-    corner(swatch, PILL)
-    make("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, swatch)
-    local box = textbox(row, {
-        Size = UDim2.new(0, 90, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -12, 0.5, 0), Text = toHex(CONFIG.Colors[key]),
-        PlaceholderText = "#RRGGBB", Font = Enum.Font.Code,
-        TextXAlignment = Enum.TextXAlignment.Center,
-    })
-    rows[key] = { swatch = swatch, box = box }
-    box.FocusLost:Connect(function()
-        local t = parseHex(box.Text)
-        if t then
-            setThemeColors({ [key] = t })
-        else
-            box.Text = toHex(CONFIG.Colors[key])
-            setStatus("Hex tidak valid. Contoh: #0A84FF", C.WARN)
-        end
+    local rGlass, _, hGlass = newRow(gGen, "Glass Transparency", "Geser atau ketik (0 - 95)",
+        "💧", Color3.fromRGB(88, 86, 214), true)
+    addSlider(rGlass, hGlass, 0, 95, math.floor(CONFIG.GlassTransparency * 100 + 0.5), function(v)
+        CONFIG.GlassTransparency = math.clamp(v, 0, 95) / 100
+        Main.BackgroundTransparency = CONFIG.GlassTransparency
+    end, function() scheduleSave() end)
+
+    local _, lBlur = newRow(gGen, "Background Blur", "Blur latar game saat UI terbuka",
+        "🌫", Color3.fromRGB(90, 200, 250), false)
+    blurSwitch = makeSwitch(lBlur, 12, function(on)
+        CONFIG.Blur = on
+        applyBlur()
+        scheduleSave()
     end)
+
+    local _, lReset = newRow(gGen, "Reset Humanoid & FOV", "Kembalikan kecepatan, lompat, dan FOV",
+        "↺", Color3.fromRGB(255, 159, 10), false)
+    local resetBtn = actionButton(lReset, "Reset", false, 12, 80)
+    resetBtn.MouseButton1Click:Connect(function()
+        local walkF = featureSetters.WalkSpeed
+        if walkF and walkF.get() then walkF.set(false) end
+        desired.speed, desired.jump = nil, nil
+        local h = getHumanoid()
+        if h then h.WalkSpeed = 16 h.UseJumpPower = true h.JumpPower = 50 end
+        if Workspace.CurrentCamera then Workspace.CurrentCamera.FieldOfView = 70 end
+        hubResetUI()
+        log("Values reset to default", "ok")
+    end)
+
+    -- Theme -------------------------------------------------------------------
+    local gTheme = newGroup("Theme")
+
+    local PRESETS = {
+        { "Blue",   { 10, 132, 255 }, { 64, 156, 255 } },
+        { "Teal",   { 64, 200, 224 }, { 120, 220, 238 } },
+        { "Green",  { 48, 209, 88 },  { 100, 225, 130 } },
+        { "Orange", { 255, 159, 10 }, { 255, 190, 70 } },
+        { "Red",    { 255, 69, 58 },  { 255, 120, 110 } },
+        { "Pink",   { 255, 55, 95 },  { 255, 110, 140 } },
+        { "Purple", { 191, 90, 242 }, { 208, 140, 248 } },
+    }
+    local rPre, _, hPre = newRow(gTheme, "Accent Color", "Pilih warna highlight",
+        "🎨", Color3.fromRGB(255, 55, 95), true)
+    local dots = make("Frame", {
+        Size = UDim2.new(1, -62, 0, 28), Position = UDim2.new(0, 50, 0, hPre + 2),
+        BackgroundTransparency = 1,
+    }, rPre)
+    make("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10),
+        VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder,
+    }, dots)
+    for i, pr in ipairs(PRESETS) do
+        local pb = make("TextButton", {
+            Size = UDim2.fromOffset(26, 26), BackgroundColor3 = rgb(pr[2]), BorderSizePixel = 0,
+            Text = "", AutoButtonColor = false, LayoutOrder = i,
+        }, dots)
+        corner(pb, PILL)
+        make("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.55, Thickness = 1.5,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, pb)
+        local sc = make("UIScale", {}, pb)
+        pb.MouseEnter:Connect(function() tw(sc, 0.15, { Scale = 1.12 }) end)
+        pb.MouseLeave:Connect(function() tw(sc, 0.2, { Scale = 1 }) end)
+        pb.MouseButton1Click:Connect(function()
+            setThemeColors({ Accent = pr[2], AccentHover = pr[3] })
+        end)
+    end
+
+    local ROW_DEFS = {
+        { "Accent",      "Accent",       "Tombol dan tab aktif" },
+        { "AccentHover", "Accent Hover", "Saat disentuh mouse" },
+        { "Background",  "Background",   "Tint kaca jendela" },
+        { "Panel",       "Panel",        "Kaca sidebar dan kartu" },
+        { "Button",      "Button",       "Kaca tombol" },
+        { "Text",        "Text",         "Teks utama" },
+        { "TextDim",     "Text Dim",     "Teks redup" },
+    }
+    for _, def in ipairs(ROW_DEFS) do
+        local key = def[1]
+        local _, l, _, swatch = newRow(gTheme, def[2], def[3], "", rgb(CONFIG.Colors[key]), false, true)
+        local box = textbox(l, {
+            Size = UDim2.new(0, 92, 0, 28), AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -12, 0.5, 0), Text = toHex(CONFIG.Colors[key]),
+            PlaceholderText = "#RRGGBB", Font = Enum.Font.Code,
+            TextXAlignment = Enum.TextXAlignment.Center,
+        })
+        rows[key] = { swatch = swatch, box = box }
+        box.FocusLost:Connect(function()
+            local t = parseHex(box.Text)
+            if t then
+                setThemeColors({ [key] = t })
+            else
+                box.Text = toHex(CONFIG.Colors[key])
+                setStatus("Hex tidak valid. Contoh: #0A84FF", C.WARN)
+            end
+        end)
+    end
+
+    local _, lSave = newRow(gTheme, "Simpan Tema", "Simpan atau kembalikan warna",
+        "💾", Color3.fromRGB(52, 199, 89), false)
+    local resetThemeBtn = actionButton(lSave, "Reset", false, 96, 76)
+    local saveBtn = actionButton(lSave, "Save", true, 12, 76)
+    saveBtn.MouseButton1Click:Connect(function() saveConfig(true) end)
+    resetThemeBtn.MouseButton1Click:Connect(function() setThemeColors(DEFAULT_COLORS) end)
+
+    -- Hub -----------------------------------------------------------------------
+    local gHub = newGroup("Hub")
+    local _, lUn = newRow(gHub, "Unload Hub", "Tutup dan hapus UI sepenuhnya",
+        "✕", Color3.fromRGB(255, 69, 58), false)
+    unloadBtn = actionButton(lUn, "Unload", false, 12, 80, { TextColor3 = "@ERR" })
+
+    -- Footer status simpan (gaya footer iOS)
+    SaveStatus = make("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 16), AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1, TextColor3 = "@MUTED",
+        Text = writefile and ("Perubahan tersimpan otomatis ke " .. SAVE_FILE)
+            or "Executor tidak mendukung writefile: pengaturan tidak bisa disimpan",
+        TextSize = 11, Font = F.Medium, TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true, LayoutOrder = 900,
+    }, Scroll)
+    make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingTop = UDim.new(0, 2) }, SaveStatus)
 end
-
-local themeBtnRow = make("Frame", {
-    Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, LayoutOrder = 20,
-}, SettingsScroll)
-make("UIListLayout", {
-    FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, themeBtnRow)
-local saveBtn = button(themeBtnRow, "Save Theme", true, { Size = UDim2.new(0.5, -4, 1, 0), LayoutOrder = 1 })
-local resetThemeBtn = button(themeBtnRow, "Reset Theme", false, { Size = UDim2.new(0.5, -4, 1, 0), LayoutOrder = 2 })
-saveBtn.MouseButton1Click:Connect(function() saveConfig(true) end)
-resetThemeBtn.MouseButton1Click:Connect(function() setThemeColors(DEFAULT_COLORS) end)
-
-SaveStatus = make("TextLabel", {
-    Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, TextColor3 = "@MUTED",
-    Text = writefile and ("Perubahan tersimpan otomatis ke " .. SAVE_FILE)
-        or "Executor tidak mendukung writefile: pengaturan tidak bisa disimpan",
-    TextSize = 11, Font = F.Medium, TextXAlignment = Enum.TextXAlignment.Left,
-    TextWrapped = true, LayoutOrder = 21,
-}, SettingsScroll)
-
-local unloadBtn = button(SettingsScroll, "Unload Hub", false, {
-    Size = UDim2.new(1, 0, 0, 36), LayoutOrder = 22, TextColor3 = "@ERR",
-})
+buildSettingsPage()
 
 track(UserInputService.InputBegan:Connect(function(input, gpe)
     if binding and input.UserInputType == Enum.UserInputType.Keyboard then
