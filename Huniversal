@@ -39,7 +39,7 @@ local CONFIG = {
     -- Ganti dengan ID audio lain bila suaranya tidak keluar
     ClickSoundId = "rbxassetid://6895079853",
 
-    -- Tombol melayang untuk buka/tutup UI (untuk HP).
+    -- Tombol melayang untuk buka/tutup UI (untuk HP). Bisa diubah di Settings.
     -- "auto" = tampil hanya di perangkat sentuh tanpa keyboard, true = selalu, false = tidak pernah
     FloatButton = "auto",
 
@@ -372,33 +372,14 @@ do
         return f
     end
 
-    -- Huruf H (kiri): dua batang + palang
-    bar(0, 18, 14, 82, 7)
-    bar(30, 18, 14, 82, 7)
-    bar(13, 53, 18, 12, 0)
-
-    -- Huruf U (kanan): batang kiri penuh, batang kanan lebih pendek (kesan "gigitan" apel)
-    bar(52, 18, 14, 66, 7)
-    bar(86, 34, 14, 50, 7)
-    -- dasar U: setengah cincin (cincin dipotong separuh bawah oleh ClipsDescendants)
-    local Bowl = make("Frame", {
-        Size = UDim2.fromOffset(48 * K, 24 * K), Position = UDim2.fromOffset(52 * K, 76 * K),
-        BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true,
-    }, Fruit)
-    local Ring = make("Frame", {
-        Size = UDim2.fromOffset(20 * K, 20 * K), Position = UDim2.fromOffset(14 * K, -10 * K),
-        BackgroundTransparency = 1, BorderSizePixel = 0,
-    }, Bowl)
-    corner(Ring, UDim.new(0.5, 0))
-    make("UIStroke", {
-        Color = FRUIT, Thickness = 14 * K, ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-    }, Ring)
-
-    -- Tangkai + daun di celah antara H dan U
-    local stem = bar(45.5, 2, 5, 20, 2.5)
-    stem.Rotation = 8
-    local leaf = bar(53, 1, 26, 12, 6, LEAF)
-    leaf.Rotation = -28
+    -- Monogram "HU" menyatu: H dan U berbagi satu batang tengah (kotak 84 x 100, digeser 8 agar di tengah)
+    -- Semua bentuk berupa kotak bersudut bulat (tanpa clipping) supaya aman saat diputar.
+    local OX = 8
+    bar(OX + 0, 0, 16, 100, 8)          -- batang kiri H
+    bar(OX + 16, 42, 18, 16, 0)         -- palang H
+    bar(OX + 34, 0, 16, 100, 8)         -- batang tengah (kanan H + kiri U)
+    bar(OX + 68, 0, 16, 100, 8)         -- batang kanan U
+    bar(OX + 34, 84, 50, 16, 8)         -- dasar U
 
     -- Progress bar + status ---------------------------------------------------------------------------------
     local BarG = make("CanvasGroup", {
@@ -839,7 +820,7 @@ local function setVisible(v, done)
 end
 
 ------------------------------------------------------------------------
--- TOMBOL MELAYANG (buka/tutup UI di HP, bisa dimatikan di Settings)
+-- TOMBOL MELAYANG (buka/tutup UI di HP, bisa diatur di Settings)
 ------------------------------------------------------------------------
 local closing = false
 
@@ -850,15 +831,57 @@ local function floatWanted()
     return CONFIG.FloatButton == true
 end
 
+-- Kaca bening (frosted): putih sangat tembus pandang + tepi mengilap (tanpa hitam / warna aksen)
 local FloatBtn = make("TextButton", {
-    Name = "FloatToggle", Size = UDim2.fromOffset(52, 52), AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.new(0, 40, 0.5, 0), BackgroundColor3 = "@ACCENT", BackgroundTransparency = 0.15,
-    BorderSizePixel = 0, Text = "HU", TextColor3 = "@TEXT", TextSize = 18, Font = F.Bold,
-    AutoButtonColor = false, Visible = false,
+    Name = "FloatToggle", Size = UDim2.fromOffset(58, 58), AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0, 40, 0.5, 0), BackgroundColor3 = "@PANEL", BackgroundTransparency = 0.82,
+    BorderSizePixel = 0, Text = "", AutoButtonColor = false, Visible = false,
 }, ScreenGui)
 corner(FloatBtn, PILL)
 rim(FloatBtn, 1.5, 45, false)
 local FloatScale = make("UIScale", {}, FloatBtn)
+
+local FloatGloss = make("Frame", {
+    Size = UDim2.fromScale(1, 0.55), BackgroundColor3 = "@WHITE", BorderSizePixel = 0,
+}, FloatBtn)
+corner(FloatGloss, PILL)
+make("UIGradient", { Rotation = 90, Transparency = seq({ {0, 0.8}, {1, 1} }) }, FloatGloss)
+
+-- Logo buah "HU" (sama dengan logo intro), dibuat kecil dan bisa berputar
+local FloatLogo = make("Frame", {
+    Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
+}, FloatBtn)
+do
+    local K = 0.36
+    local FRUIT, LEAF = Color3.fromRGB(244, 247, 252), Color3.fromRGB(88, 214, 120)
+    local fruit = make("Frame", {
+        Size = UDim2.fromOffset(100 * K, 100 * K), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, FloatLogo)
+    local function fb(x, y, w, h, r, color)
+        local f = make("Frame", {
+            Size = UDim2.fromOffset(w * K, h * K), Position = UDim2.fromOffset(x * K, y * K),
+            BackgroundColor3 = color or FRUIT, BorderSizePixel = 0,
+        }, fruit)
+        corner(f, UDim.new(0, r * K))
+        return f
+    end
+    local OX = 8
+    fb(OX + 0, 0, 16, 100, 8)           -- batang kiri H
+    fb(OX + 16, 42, 18, 16, 0)          -- palang H
+    fb(OX + 34, 0, 16, 100, 8)          -- batang tengah (kanan H + kiri U)
+    fb(OX + 68, 0, 16, 100, 8)          -- batang kanan U
+    fb(OX + 34, 84, 50, 16, 8)          -- dasar U
+end
+
+local spinTween
+local function spinLogo()
+    if spinTween then spinTween:Cancel() end
+    FloatLogo.Rotation = 0
+    spinTween = TweenService:Create(FloatLogo,
+        TweenInfo.new(0.75, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Rotation = 360 })
+    spinTween:Play()
+end
 
 local function applyFloat()
     FloatBtn.Visible = floatWanted() and not Splash.introActive and not closing
@@ -896,6 +919,7 @@ do
             tw(FloatScale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
             if not moved and not Splash.introActive and not closing then
                 playClick()
+                spinLogo()
                 setVisible(not shown)
             end
         end
@@ -2322,6 +2346,7 @@ local function saveConfig(manual)
             Colors = CONFIG.Colors, ToggleKey = toggleKey.Name, Keybinds = CONFIG.Keybinds,
             GlassTransparency = CONFIG.GlassTransparency, Blur = CONFIG.Blur,
             Sound = CONFIG.Sound,
+            FloatButton = CONFIG.FloatButton,
         }))
     end)
     if ok then
@@ -2416,6 +2441,28 @@ local function buildSettingsPage()
     soundSwitch = makeSwitch(lSnd, 12, function(on)
         CONFIG.Sound = on
         scheduleSave()
+    end)
+
+    -- Tombol melayang: Auto (hanya HP tanpa keyboard) -> On -> Off
+    local _, lFloat = newRow(gGen, "Floating Button", "Tombol melayang buka/tutup (HP)",
+        "◉", Color3.fromRGB(255, 149, 0), false)
+    local function floatLabel()
+        if CONFIG.FloatButton == "auto" then return "Auto" end
+        return CONFIG.FloatButton and "On" or "Off"
+    end
+    local floatSetting = actionButton(lFloat, floatLabel(), false, 12, 80)
+    floatSetting.MouseButton1Click:Connect(function()
+        if CONFIG.FloatButton == "auto" then
+            CONFIG.FloatButton = true
+        elseif CONFIG.FloatButton == true then
+            CONFIG.FloatButton = false
+        else
+            CONFIG.FloatButton = "auto"
+        end
+        floatSetting.Text = floatLabel()
+        applyFloat()
+        scheduleSave()
+        log("Floating Button: " .. floatLabel(), "info")
     end)
 
     local _, lReset = newRow(gGen, "Reset Humanoid & FOV", "Kembalikan kecepatan, lompat, dan FOV",
@@ -2554,14 +2601,25 @@ local function unload()
     for _, c in ipairs(connections) do c:Disconnect() end
     ScreenGui:Destroy()
 end
-local closing = false
+
 local function closeAnimated()
     if closing then return end
     closing = true
+    applyFloat()
     setVisible(false, unload)
 end
 unloadBtn.MouseButton1Click:Connect(closeAnimated)
-CloseBtn.MouseButton1Click:Connect(closeAnimated)
+
+-- Titik merah: kalau tombol melayang aktif cukup sembunyikan UI (bisa dibuka lagi),
+-- kalau tidak ada tombol melayang maka UI di-unload seperti semula.
+CloseBtn.MouseButton1Click:Connect(function()
+    if floatWanted() then
+        playClick()
+        setVisible(false)
+    else
+        closeAnimated()
+    end
+end)
 
 ------------------------------------------------------------------------
 -- CREDITS PAGE
@@ -2603,18 +2661,13 @@ local function playIntro()
         Splash.sheen(0.7)
         task.wait(0.6)
         Splash.ripple()
-        -- anchor di tengah agar jendela tumbuh dari titik tengah layar
-        local origPos = Main.Position
-        Main.AnchorPoint = Vector2.new(0.5, 0.5)
-        Main.Position = UDim2.new(origPos.X.Scale, origPos.X.Offset + WIN_W / 2,
-            origPos.Y.Scale, origPos.Y.Offset + WIN_H / 2)
+        -- Main sudah berjangkar di tengah layar, jadi cukup ditampilkan lalu di-scale
         Main.Visible = true
         Splash.dissolve(1.0)
         transition(1, 1.0, Enum.EasingStyle.Exponential, function()
-            Main.AnchorPoint = Vector2.new(0, 0)
-            Main.Position = origPos
             scaleFrom = 0.9
             Splash.introActive = false
+            applyFloat() -- tampilkan tombol melayang setelah intro selesai
         end)
         applyBlur()
     end)
